@@ -31,8 +31,27 @@ class SpHelper {
     return await sp.setString(key, value);
   }
 
-  static Future<bool?> clearAll() async {
-    return await _sp?.clear();
+  static Future<bool> clearAll() async {
+    try {
+      final sp = await getSP();
+      await sp.clear();
+      await _secureInstance().deleteAll();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<bool> remove(String key, {bool secure = false}) async {
+    try {
+      if (secure) {
+        await _secureInstance().delete(key: key);
+      }
+      final sp = await getSP();
+      return await sp.remove(key);
+    } catch (_) {
+      return false;
+    }
   }
 
   ///

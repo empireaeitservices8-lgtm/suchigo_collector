@@ -1,4 +1,4 @@
-// Microsoft Visual C++ generated resource script.
+﻿// Microsoft Visual C++ generated resource script.
 //
 #pragma code_page(65001)
 #include "resource.h"
@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "PROJECT_NAME_PLACEHOLDER" "\0"
+            VALUE "CompanyName", "com.suchigo" "\0"
+            VALUE "FileDescription", "suchigo_collector" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "PROJECT_NAME_PLACEHOLDER" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2023 com.example. All rights reserved." "\0"
-            VALUE "OriginalFilename", "PROJECT_NAME_PLACEHOLDER.exe" "\0"
-            VALUE "ProductName", "PROJECT_NAME_PLACEHOLDER" "\0"
+            VALUE "InternalName", "suchigo_collector" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2023 com.suchigo. All rights reserved." "\0"
+            VALUE "OriginalFilename", "suchigo_collector.exe" "\0"
+            VALUE "ProductName", "suchigo_collector" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

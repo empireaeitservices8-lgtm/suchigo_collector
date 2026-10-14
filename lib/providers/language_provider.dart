@@ -1,8 +1,8 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 
 
-import 'package:PROJECT_NAME_PLACEHOLDER/l10n/app_localizations.dart';
+import 'package:suchigo_collector/l10n/app_localizations.dart';
 
 import '/helpers/sp_helper.dart';
 import '/utils/extensions.dart';

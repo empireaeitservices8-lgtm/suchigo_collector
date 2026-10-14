@@ -1,4 +1,4 @@
-package $BUNDLE_ID
+package com.suchiGo.collector
 
 import io.flutter.embedding.android.FlutterActivity
 

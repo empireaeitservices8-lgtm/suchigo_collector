@@ -1,5 +1,5 @@
-import 'package:PROJECT_NAME_PLACEHOLDER/utils/colors.dart';
-import 'package:PROJECT_NAME_PLACEHOLDER/utils/styles.dart';
+import 'package:suchigo_collector/utils/colors.dart';
+import 'package:suchigo_collector/utils/styles.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -132,16 +132,18 @@ class CustomTextField extends StatelessWidget {
                           : contentPadding ??
                               EdgeInsets.only(
                                   left: 0, top: 12, right: 4, bottom: 4),
-                      //filled: true,
+                      filled: true,
+                      fillColor: Colors.white,
+                      hoverColor: Colors.transparent,
+                      focusColor: Colors.transparent,
                       isDense: true,
                       suffixIcon: suffixWidget != null
-                          //  suffixIconConstraints: BoxConstraints(minWidth: 15, minHeight: 19,maxWidth: 15, maxHeight: 19,),
                           ? InkWell(
                               onTap: onSuffixTap,
                               child: SizedBox(
                                 width: suffixWidgetWidth,
                                 child: Padding(
-                                  padding: EdgeInsets.only(right: 15),
+                                  padding: const EdgeInsets.only(right: 15),
                                   child: Align(
                                       alignment: Alignment.centerRight,
                                       child: suffixWidget),
@@ -149,32 +151,62 @@ class CustomTextField extends StatelessWidget {
                               ),
                             )
                           : null,
-                      errorBorder: InputBorder.none,
+                      errorBorder: OutlineInputBorder(
+                        borderSide: BorderSide(color: AppColors().colorDE202B),
+                        borderRadius: BorderRadius.circular(
+                            enableRoundedBorder ? borderRadius : 8),
+                      ),
                       focusedBorder: OutlineInputBorder(
-                        borderSide: BorderSide(color: AppColors().colorBlack),
-                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(
+                            color: borderColor ?? const Color(0xFF1D723C),
+                            width: 1.5),
+                        borderRadius: BorderRadius.circular(
+                            enableRoundedBorder ? borderRadius : 8),
                       ),
                       focusedErrorBorder: OutlineInputBorder(
-                          borderSide: BorderSide(color: AppColors().colorBCBCBC),
-                          borderRadius: BorderRadius.circular(8)),
+                        borderSide: BorderSide(color: AppColors().colorDE202B),
+                        borderRadius: BorderRadius.circular(
+                            enableRoundedBorder ? borderRadius : 8),
+                      ),
                       enabledBorder: OutlineInputBorder(
-                          borderSide: BorderSide(color: AppColors().colorBCBCBC),
-                          borderRadius: BorderRadius.circular(8)),
+                        borderSide: BorderSide(
+                          color: enabledBorderColor ??
+                              borderColor ??
+                              const Color(0xFFE8F5E9),
+                          width: 1.0,
+                        ),
+                        borderRadius: BorderRadius.circular(
+                            enableRoundedBorder ? borderRadius : 8),
+                      ),
+                      disabledBorder: OutlineInputBorder(
+                        borderSide: BorderSide(
+                          color: enabledBorderColor ??
+                              borderColor ??
+                              const Color(0xFFE8F5E9),
+                          width: 1.0,
+                        ),
+                        borderRadius: BorderRadius.circular(
+                            enableRoundedBorder ? borderRadius : 8),
+                      ),
                       border: OutlineInputBorder(
-                        borderSide: BorderSide(color: AppColors().colorBCBCBC),
-                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(
+                          color: borderColor ?? const Color(0xFFE8F5E9),
+                          width: 1.0,
+                        ),
+                        borderRadius: BorderRadius.circular(
+                            enableRoundedBorder ? borderRadius : 8),
                       ),
                       prefixIcon: prefixWidget != null
                           ? Padding(
                               padding: prefixPadding ??
-                                  EdgeInsets.only(left: 0, top: 4, right: 4),
+                                  const EdgeInsets.only(left: 0, top: 4, right: 4),
                               child: prefixWidget,
                             )
                           : null,
-                      // label: Text(label),
                       hintText: hint ?? '',
-                      hintStyle:
-                          hintStyle ?? tsS15W500.copyWith(color: AppColors().colorBDBDBD)),
+                      hintStyle: hintStyle ??
+                          tsS15W500.copyWith(color: const Color(0xFF9E9E9E)),
+                    ),
                 ),
               ),
             ),

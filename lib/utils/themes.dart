@@ -1,5 +1,5 @@
-import 'package:PROJECT_NAME_PLACEHOLDER/utils/app_palette.dart';
-import 'package:PROJECT_NAME_PLACEHOLDER/utils/brand_colors.dart';
+import 'package:suchigo_collector/utils/app_palette.dart';
+import 'package:suchigo_collector/utils/brand_colors.dart';
 import 'package:flutter/material.dart';
 
 // Central seed color for the app's ColorScheme (brand primary blue)
@@ -113,14 +113,30 @@ ThemeData _buildTheme({required Brightness brightness}) {
       filled: true,
       fillColor: isDark
           ? colorScheme.surfaceContainerHighest.withValues(alpha: 0.25)
-          : colorScheme.surfaceContainerHighest.withValues(alpha: 0.50),
+          : Colors.white,
+      hoverColor: Colors.transparent,
+      focusColor: Colors.transparent,
       hintStyle: base.textTheme.bodyMedium?.copyWith(
         color: colorScheme.onSurfaceVariant,
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(_radius),
+        borderSide: BorderSide(
+          color: isDark ? colorScheme.outlineVariant : const Color(0xFFE8F5E9),
+        ),
+      ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(_radius),
-        borderSide: BorderSide(color: colorScheme.outlineVariant),
+        borderSide: BorderSide(
+          color: isDark ? colorScheme.outlineVariant : const Color(0xFFE8F5E9),
+        ),
+      ),
+      disabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(_radius),
+        borderSide: BorderSide(
+          color: isDark ? colorScheme.outlineVariant : const Color(0xFFE8F5E9),
+        ),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(_radius),

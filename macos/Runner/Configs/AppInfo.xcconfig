@@ -5,10 +5,10 @@
 // 'flutter create' template.
 
 // The application's name. By default this is also the title of the Flutter window.
-PRODUCT_NAME = PROJECT_NAME_PLACEHOLDER
+PRODUCT_NAME = suchigo_collector
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = BUNDLE_ID_PLACEHOLDER
+PRODUCT_BUNDLE_IDENTIFIER = com.suchiGo.collector
 
 // The copyright displayed in application information
-PRODUCT_COPYRIGHT = Copyright © 2023 com.example. All rights reserved.
+PRODUCT_COPYRIGHT = Copyright © 2023 com.suchigo. All rights reserved.
