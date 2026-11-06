@@ -19,4 +19,8 @@ class AppConfig {
 
   // Backend API Base URL
   static String apiBaseUrl = "https://suchigo.pythonanywhere.com/api/";
+
+  // Razorpay Configuration
+  static const String razorpayKeyId = "rzp_live_TwUDkqcsazGHUV";
+  static const String razorpayKeySecret = "5ZG4DH1xrC5lgx5KOoZCS6pt";
 }

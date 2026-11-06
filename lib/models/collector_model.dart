@@ -19,7 +19,9 @@ class CollectorModel {
 
   factory CollectorModel.fromJson(Map<String, dynamic> json) {
     return CollectorModel(
-      id: json['id'] is int ? json['id'] : int.tryParse(json['id'].toString()) ?? 0,
+      id: json['id'] is int
+          ? json['id']
+          : int.tryParse(json['id'].toString()) ?? 0,
       username: json['username']?.toString() ?? '',
       name: json['name']?.toString() ?? '',
       email: json['email']?.toString() ?? '',
@@ -77,7 +79,8 @@ class AuthResponseModel {
     return AuthResponseModel(
       message: json['message']?.toString() ?? '',
       token: json['token']?.toString() ?? '',
-      collector: json['collector'] != null && json['collector'] is Map<String, dynamic>
+      collector: json['collector'] != null &&
+              json['collector'] is Map<String, dynamic>
           ? CollectorModel.fromJson(json['collector'] as Map<String, dynamic>)
           : null,
     );
@@ -100,12 +103,25 @@ class DistrictModel {
 
   factory DistrictModel.fromJson(Map<String, dynamic> json) {
     return DistrictModel(
-      id: json['id'] is int ? json['id'] : int.tryParse(json['id'].toString()) ?? 0,
+      id: json['id'] is int
+          ? json['id']
+          : int.tryParse(json['id'].toString()) ?? 0,
       name: json['name']?.toString() ?? '',
     );
   }
 
   Map<String, dynamic> toJson() => {'id': id, 'name': name};
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is DistrictModel &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name;
+
+  @override
+  int get hashCode => Object.hash(id, name);
 }
 
 class LocalBodyModel {
@@ -140,6 +156,17 @@ class LocalBodyModel {
         'localbody_type': localbodyType,
         'district': district,
       };
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is LocalBodyModel &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name;
+
+  @override
+  int get hashCode => Object.hash(id, name);
 }
 
 class LocationPickupModel {
@@ -163,6 +190,10 @@ class LocationPickupModel {
   final String? status;
   final String? vehicleName;
   final String? vehicleNumber;
+  final double amount;
+  final double quantityKg;
+  final String? paymentMethod;
+  final String? scheduleCode;
 
   LocationPickupModel({
     required this.id,
@@ -185,6 +216,10 @@ class LocationPickupModel {
     this.status,
     this.vehicleName,
     this.vehicleNumber,
+    this.amount = 0.0,
+    this.quantityKg = 0.0,
+    this.paymentMethod,
+    this.scheduleCode,
   });
 
   factory LocationPickupModel.fromJson(Map<String, dynamic> json) {
@@ -204,7 +239,10 @@ class LocationPickupModel {
       district: json['district']?.toString(),
       zipCode: json['zip_code']?.toString(),
       ward: json['ward']?.toString(),
-      localBody: json['local_body']?.toString(),
+      localBody: json['local_body']?.toString() ??
+          json['dh_localbody']?.toString() ??
+          json['localbody']?.toString() ??
+          json['local_body_name']?.toString(),
       landmark: json['landmark']?.toString(),
       pickupDate: json['pickup_date']?.toString(),
       pickupTimeSlot: json['pickup_time_slot']?.toString(),
@@ -213,6 +251,30 @@ class LocationPickupModel {
       status: json['status']?.toString(),
       vehicleName: json['vehicle_name']?.toString(),
       vehicleNumber: json['vehicle_number']?.toString(),
+      amount: json['amount'] != null
+          ? (double.tryParse(json['amount'].toString()) ?? 0.0)
+          : (json['total_amount'] != null
+              ? (double.tryParse(json['total_amount'].toString()) ?? 0.0)
+              : (json['rate'] != null
+                  ? (double.tryParse(json['rate'].toString()) ?? 0.0)
+                  : 0.0)),
+      quantityKg: json['quantity_kg'] != null
+          ? (double.tryParse(json['quantity_kg'].toString()) ?? 0.0)
+          : (json['quantity'] != null
+              ? (double.tryParse(json['quantity'].toString()) ?? 0.0)
+              : (json['weight'] != null
+                  ? (double.tryParse(json['weight'].toString()) ?? 0.0)
+                  : 0.0)),
+      paymentMethod: json['payment_method']?.toString() ??
+          json['payment_mode']?.toString() ??
+          json['payment_type']?.toString(),
+      scheduleCode: json['schedule_code']?.toString() ??
+          json['order_id']?.toString() ??
+          json['bill_no']?.toString() ??
+          json['bill_id']?.toString() ??
+          (json['pickup_id'] != null
+              ? 'BILL-${json['pickup_id']}'
+              : (json['id'] != null ? 'BILL-${json['id']}' : null)),
     );
   }
 
@@ -301,14 +363,17 @@ class WardModel {
 
   String get displayName => formatWardName(name, wardNumber, id);
 
-  static String formatWardName(String rawName, [String? rawWardNumber, int? id]) {
+  static String formatWardName(String rawName,
+      [String? rawWardNumber, int? id]) {
     String name = rawName.trim();
     String? numStr = (rawWardNumber != null && rawWardNumber.trim().isNotEmpty)
         ? rawWardNumber.trim()
         : null;
 
     // Check if name has pattern like "Ward 1 - Neericode West" or "Ward 1: Neericode West"
-    final wardPrefixMatch = RegExp(r'^Ward\s*(\d+)\s*[-:]*\s*(.*)$', caseSensitive: false).firstMatch(name);
+    final wardPrefixMatch =
+        RegExp(r'^Ward\s*(\d+)\s*[-:]*\s*(.*)$', caseSensitive: false)
+            .firstMatch(name);
     if (wardPrefixMatch != null) {
       numStr ??= wardPrefixMatch.group(1);
       final rest = wardPrefixMatch.group(2)!.trim();
@@ -370,6 +435,18 @@ class WardModel {
         if (wardNumber != null) 'ward_number': wardNumber,
         if (localbody != null) 'localbody': localbody,
       };
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is WardModel &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          wardNumber == other.wardNumber;
+
+  @override
+  int get hashCode => Object.hash(id, name, wardNumber);
 }
 
 class CollectorVehicleModel {
@@ -511,22 +588,35 @@ class WasteTypeModel {
 class DisposalRateModel {
   final int id;
   final int? localBody;
+  final int? localBodyId;
+  final String? localBodyName;
   final double ratePerKg;
 
   DisposalRateModel({
     required this.id,
     this.localBody,
+    this.localBodyId,
+    this.localBodyName,
     required this.ratePerKg,
   });
 
   factory DisposalRateModel.fromJson(Map<String, dynamic> json) {
+    final parsedId = json['local_body_id'] is int
+        ? json['local_body_id'] as int
+        : (int.tryParse(json['local_body_id']?.toString() ?? '') ??
+            (json['local_body'] is int
+                ? json['local_body'] as int
+                : int.tryParse(json['local_body']?.toString() ?? '')));
+    final parsedName = json['local_body_name']?.toString() ??
+        (json['local_body'] is String ? json['local_body'] as String : null);
+
     return DisposalRateModel(
       id: json['id'] is int
           ? json['id']
           : int.tryParse(json['id']?.toString() ?? '') ?? 0,
-      localBody: json['local_body'] is int
-          ? json['local_body']
-          : int.tryParse(json['local_body']?.toString() ?? ''),
+      localBody: parsedId,
+      localBodyId: parsedId,
+      localBodyName: parsedName,
       ratePerKg:
           double.tryParse(json['rate_per_kg']?.toString() ?? '42') ?? 42.0,
     );
@@ -534,7 +624,9 @@ class DisposalRateModel {
 
   Map<String, dynamic> toJson() => {
         'id': id,
-        'local_body': localBody,
+        'local_body': localBodyName ?? localBody,
+        'local_body_id': localBodyId,
+        'local_body_name': localBodyName,
         'rate_per_kg': ratePerKg,
       };
 }
@@ -580,7 +672,8 @@ class AdminDashboardStatisticsModel {
       totalBills: json['total_bills'] is int
           ? json['total_bills']
           : int.tryParse(json['total_bills']?.toString() ?? '') ?? 0,
-      pendingCash: double.tryParse(json['pending_cash']?.toString() ?? '') ?? 0.0,
+      pendingCash:
+          double.tryParse(json['pending_cash']?.toString() ?? '') ?? 0.0,
       totalRevenue:
           double.tryParse(json['total_revenue']?.toString() ?? '') ?? 0.0,
     );
@@ -659,10 +752,24 @@ class AdminCollectorHistoryModel {
       col = CollectorModel.fromJson(json);
     }
 
-    final locationsList = json['locations'] is List
-        ? (json['locations'] as List)
-            .map((item) =>
-                LocationPickupModel.fromJson(item as Map<String, dynamic>))
+    final rawLocations = json['locations'] ??
+        json['history'] ??
+        json['pickups'] ??
+        json['orders'] ??
+        json['records'];
+
+    final locationsList = rawLocations is List
+        ? rawLocations
+            .map((item) {
+              if (item is Map<String, dynamic>) {
+                return LocationPickupModel.fromJson(item);
+              } else if (item is Map) {
+                return LocationPickupModel.fromJson(
+                    Map<String, dynamic>.from(item));
+              }
+              return null;
+            })
+            .whereType<LocationPickupModel>()
             .toList()
         : <LocationPickupModel>[];
 
@@ -670,10 +777,21 @@ class AdminCollectorHistoryModel {
         ? (json['bag_assignments'] as List)
         : <dynamic>[];
 
+    int sumBagCounts = 0;
+    for (final item in bags) {
+      if (item is Map) {
+        final count = item['bag_count'];
+        if (count != null) {
+          sumBagCounts +=
+              (count is int ? count : int.tryParse(count.toString()) ?? 0);
+        }
+      }
+    }
+
     final totalBags = json['total_bag_assignments'] is int
         ? json['total_bag_assignments'] as int
-        : int.tryParse(json['total_bag_assignments']?.toString() ?? '') ??
-            bags.length;
+        : (int.tryParse(json['total_bag_assignments']?.toString() ?? '') ??
+            (sumBagCounts > 0 ? sumBagCounts : bags.length));
 
     return AdminCollectorHistoryModel(
       collector: col,
@@ -700,6 +818,17 @@ class VehicleModelItem {
   }
 
   Map<String, dynamic> toJson() => {'id': id, 'name': name};
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is VehicleModelItem &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name;
+
+  @override
+  int get hashCode => Object.hash(id, name);
 }
 
 class VehicleNumberItem {
@@ -729,6 +858,15 @@ class VehicleNumberItem {
         'number': number,
         if (vehicleModelId != null) 'vehicle_model': vehicleModelId,
       };
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is VehicleNumberItem &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          number == other.number;
+
+  @override
+  int get hashCode => Object.hash(id, number);
 }
-
-

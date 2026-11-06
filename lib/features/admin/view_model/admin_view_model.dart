@@ -270,15 +270,28 @@ class AdminViewModel extends ChangeNotifier {
   ];
 
   static AdminCollectorStats _createStatsForCollector(CollectorModel c, int index) {
+    final isAmal = c.id == 19 ||
+        c.name.trim().toLowerCase() == "amal" ||
+        c.username.trim().toLowerCase() == "amal";
+
+    final double quantity =
+        isAmal ? 35.0 : _sampleQuantities[index % _sampleQuantities.length];
+    final double revenue =
+        isAmal ? 88.0 : _sampleRevenues[index % _sampleRevenues.length];
+    final int pickups =
+        isAmal ? 2 : _samplePickups[index % _samplePickups.length];
+
     return AdminCollectorStats(
       collector: c,
       isOnDuty: index % 5 != 0, // 80% on duty, 20% off duty
-      hasVehicle: index % 4 != 0, // 75% assigned, 25% no vehicle
+      hasVehicle: c.vehicleName != null && c.vehicleName!.trim().isNotEmpty
+          ? true
+          : (index % 4 != 0),
       localBody: _sampleLocalBodies[index % _sampleLocalBodies.length],
       ward: _sampleWards[index % _sampleWards.length],
-      quantityKg: _sampleQuantities[index % _sampleQuantities.length],
-      revenue: _sampleRevenues[index % _sampleRevenues.length],
-      pickups: _samplePickups[index % _samplePickups.length],
+      quantityKg: quantity,
+      revenue: revenue,
+      pickups: pickups,
     );
   }
 
@@ -539,6 +552,25 @@ class AdminViewModel extends ChangeNotifier {
     } catch (e) {
       debugPrint('[AdminViewModel] assignVehicle error: $e');
       return false;
+    }
+  }
+
+  Future<Map<String, dynamic>?> assignBags({
+    required int collectorId,
+    required int bagCount,
+  }) async {
+    try {
+      final res = await _apiClient.assignBagsToCollector(
+        collectorId: collectorId,
+        bagCount: bagCount,
+      );
+      if (res is Map<String, dynamic>) {
+        return res;
+      }
+      return {'message': 'Bags assigned successfully'};
+    } catch (e) {
+      debugPrint('[AdminViewModel] assignBags error: $e');
+      return null;
     }
   }
 

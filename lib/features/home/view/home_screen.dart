@@ -55,17 +55,6 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    if (homeVm.selectedWard == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Please select a Ward"),
-          backgroundColor: SuchigoColors.collectorGreen,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-      return;
-    }
-
     final success = await homeVm.saveProfile();
     if (mounted) {
       if (success) {
@@ -211,7 +200,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       icon: Icons.location_on_outlined,
                       label: "WARD DETAILS",
                       value: homeVm.selectedWard?.displayName ??
-                          "1 - NEERICODE WEST",
+                          (homeVm.wards.isNotEmpty
+                              ? "All Wards (${homeVm.wards.length})"
+                              : "All Wards"),
                     ),
                   ],
                 ),
@@ -1250,7 +1241,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildDropdownRow<T>({
+  Widget _buildDropdownRow<T extends Object>({
     required IconData icon,
     required String label,
     required T? value,
@@ -1259,6 +1250,10 @@ class _HomeScreenState extends State<HomeScreen> {
     required ValueChanged<T?>? onChanged,
     VoidCallback? onClear,
   }) {
+    final T? safeValue =
+        value != null && items.where((item) => item.value == value).length == 1
+            ? value
+            : null;
     return Padding(
       padding: EdgeInsets.symmetric(vertical: 6.spMin),
       child: Row(
@@ -1290,7 +1285,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     Expanded(
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<T>(
-                          value: value,
+                          value: safeValue,
                           isExpanded: true,
                           isDense: true,
                           dropdownColor: Colors.white,

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:suchigo_collector/config/app_config.dart';
 import 'package:suchigo_collector/helpers/sp_helper.dart';
 import 'package:suchigo_collector/models/collector_model.dart';
+import 'package:suchigo_collector/services/notification_service.dart';
 import 'package:suchigo_collector/utils/interceptors.dart';
 
 class ApiClient {
@@ -56,7 +57,8 @@ class ApiClient {
 
   void updateBaseUrl(String newBaseUrl) {
     AppConfig.apiBaseUrl = newBaseUrl;
-    _dio.options.baseUrl = newBaseUrl.endsWith('/') ? newBaseUrl : '$newBaseUrl/';
+    _dio.options.baseUrl =
+        newBaseUrl.endsWith('/') ? newBaseUrl : '$newBaseUrl/';
   }
 
   Future<void> ensureSessionLoaded() async {
@@ -69,15 +71,16 @@ class ApiClient {
       _userRole = await SpHelper.getString('user_role');
       final collectorJson = await SpHelper.getString('collector_data');
       if (collectorJson != null && collectorJson.isNotEmpty) {
-        _currentCollector =
-            CollectorModel.fromJson(jsonDecode(collectorJson) as Map<String, dynamic>);
+        _currentCollector = CollectorModel.fromJson(
+            jsonDecode(collectorJson) as Map<String, dynamic>);
       }
     } catch (e) {
       debugPrint('[ApiClient] Error loading saved session: $e');
     }
   }
 
-  Future<void> saveSession(String token, CollectorModel? collector, {String? role}) async {
+  Future<void> saveSession(String token, CollectorModel? collector,
+      {String? role}) async {
     _authToken = token;
     _currentCollector = collector;
     if (role != null) _userRole = role;
@@ -87,7 +90,8 @@ class ApiClient {
         await SpHelper.saveString('user_role', role);
       }
       if (collector != null) {
-        await SpHelper.saveString('collector_data', jsonEncode(collector.toJson()));
+        await SpHelper.saveString(
+            'collector_data', jsonEncode(collector.toJson()));
       }
     } catch (e) {
       debugPrint('[ApiClient] Error saving session: $e');
@@ -99,7 +103,12 @@ class ApiClient {
     _userRole = null;
     _currentCollector = null;
     try {
+      final savedFcmToken = NotificationService().fcmToken ??
+          await SpHelper.getString('fcm_token');
       await SpHelper.clearAll();
+      if (savedFcmToken != null && savedFcmToken.isNotEmpty) {
+        await SpHelper.saveString('fcm_token', savedFcmToken);
+      }
     } catch (e) {
       debugPrint('[ApiClient] Error clearing session: $e');
     }
@@ -115,7 +124,8 @@ class ApiClient {
     final trimmedPass = password.trim();
 
     // 1. Check dummy admin login credentials (username: admin, password: admin)
-    if (trimmedUser.toLowerCase() == 'admin' && trimmedPass.toLowerCase() == 'admin') {
+    if (trimmedUser.toLowerCase() == 'admin' &&
+        trimmedPass.toLowerCase() == 'admin') {
       final dummyAdminCollector = CollectorModel(
         id: 999,
         username: 'admin',
@@ -133,9 +143,14 @@ class ApiClient {
     }
 
     try {
+      final fcmToken = NotificationService().fcmToken ??
+          await NotificationService().getFcmToken() ??
+          await SpHelper.getString('fcm_token') ??
+          '';
       final payload = {
         'username': trimmedUser,
         'password': trimmedPass,
+        'fcm_token': fcmToken,
         if (role != null) 'role': role,
       };
 
@@ -146,14 +161,16 @@ class ApiClient {
             AuthResponseModel.fromJson(response.data as Map<String, dynamic>);
 
         if (authResponse.token.isNotEmpty) {
-          await saveSession(authResponse.token, authResponse.collector, role: role);
+          await saveSession(authResponse.token, authResponse.collector,
+              role: role);
         }
         return authResponse;
       } else {
         throw Exception('Invalid response structure from login API');
       }
     } on DioException catch (e) {
-      final errorMsg = e.response?.data is Map && e.response?.data['message'] != null
+      final errorMsg = e.response?.data is Map &&
+              e.response?.data['message'] != null
           ? e.response?.data['message'].toString()
           : (e.response?.data is Map && e.response?.data['error'] != null
               ? e.response?.data['error'].toString()
@@ -187,7 +204,8 @@ class ApiClient {
       );
       if (response.data is List) {
         return (response.data as List)
-            .map((item) => LocalBodyModel.fromJson(item as Map<String, dynamic>))
+            .map(
+                (item) => LocalBodyModel.fromJson(item as Map<String, dynamic>))
             .toList();
       }
       return [];
@@ -210,9 +228,17 @@ class ApiClient {
         queryParameters: queryParams.isNotEmpty ? queryParams : null,
       );
       if (response.data is List) {
-        return (response.data as List)
+        final allWards = (response.data as List)
             .map((item) => WardModel.fromJson(item as Map<String, dynamic>))
             .toList();
+        if (localBodyId != null) {
+          final filtered =
+              allWards.where((w) => w.localbody == localBodyId).toList();
+          if (filtered.isNotEmpty) {
+            return filtered;
+          }
+        }
+        return allWards;
       }
       return [];
     } catch (e) {
@@ -257,11 +283,12 @@ class ApiClient {
       final response = await _dio.post('locations/', data: payload);
       return response.data;
     } on DioException catch (e) {
-      final errorMsg = e.response?.data is Map && e.response?.data['message'] != null
-          ? e.response?.data['message'].toString()
-          : (e.response?.data is Map && e.response?.data['error'] != null
-              ? e.response?.data['error'].toString()
-              : e.message ?? 'Failed to save location.');
+      final errorMsg =
+          e.response?.data is Map && e.response?.data['message'] != null
+              ? e.response?.data['message'].toString()
+              : (e.response?.data is Map && e.response?.data['error'] != null
+                  ? e.response?.data['error'].toString()
+                  : e.message ?? 'Failed to save location.');
       throw Exception(errorMsg);
     }
   }
@@ -287,7 +314,8 @@ class ApiClient {
       final response = await _dio.get('admin/collectors/');
       if (response.data is List) {
         return (response.data as List)
-            .map((item) => CollectorModel.fromJson(item as Map<String, dynamic>))
+            .map(
+                (item) => CollectorModel.fromJson(item as Map<String, dynamic>))
             .toList();
       }
       return [];
@@ -298,7 +326,8 @@ class ApiClient {
   }
 
   /// GET admin/collector-history/?collector_id=19
-  Future<AdminCollectorHistoryModel> getAdminCollectorHistory(int collectorId) async {
+  Future<AdminCollectorHistoryModel> getAdminCollectorHistory(
+      int collectorId) async {
     try {
       final response = await _dio.get(
         'admin/collector-history/',
@@ -451,6 +480,25 @@ class ApiClient {
     }
   }
 
+  /// POST admin/assign-bags/
+  Future<dynamic> assignBagsToCollector({
+    required int collectorId,
+    required int bagCount,
+  }) async {
+    try {
+      final payload = {
+        'collector': collectorId,
+        'bag_count': bagCount,
+      };
+      final response = await _dio.post('admin/assign-bags/', data: payload);
+      debugPrint('[ApiClient] assignBagsToCollector success: ${response.data}');
+      return response.data;
+    } catch (e) {
+      debugPrint('[ApiClient] assignBagsToCollector error: $e');
+      rethrow;
+    }
+  }
+
   /// GET collector/bag-status/?collector_id=12
   Future<CollectorBagStatusModel> getCollectorBagStatus(int collectorId) async {
     try {
@@ -537,7 +585,8 @@ class ApiClient {
         'location_id': locationId,
       };
       final response = await _dio.post('reschedule-pickup/', data: payload);
-      debugPrint('[ApiClient] Successfully rescheduled pickup $pickupId to $newDate: ${response.data}');
+      debugPrint(
+          '[ApiClient] Successfully rescheduled pickup $pickupId to $newDate: ${response.data}');
       return response.data;
     } on DioException catch (e) {
       debugPrint('[ApiClient] reschedulePickup error: $e');
@@ -568,8 +617,8 @@ class ApiClient {
       final response = await _dio.get('waste-types/');
       if (response.data is List) {
         return (response.data as List)
-            .map((item) =>
-                WasteTypeModel.fromJson(item as Map<String, dynamic>))
+            .map(
+                (item) => WasteTypeModel.fromJson(item as Map<String, dynamic>))
             .where((w) => w.isActive)
             .toList();
       }
@@ -646,6 +695,8 @@ class ApiClient {
     try {
       final payload = {
         'amount': amount,
+        'key_id': AppConfig.razorpayKeyId,
+        'key_secret': AppConfig.razorpayKeySecret,
         if (pickupId != null) 'pickup_id': pickupId,
         if (orderId != null) 'order_id': orderId,
       };
@@ -653,7 +704,47 @@ class ApiClient {
       debugPrint('[ApiClient] generateRazorpayQr success: ${response.data}');
       return response.data;
     } on DioException catch (e) {
-      debugPrint('[ApiClient] generateRazorpayQr error: $e');
+      debugPrint(
+          '[ApiClient] generateRazorpayQr backend error, trying Razorpay API directly: $e');
+      try {
+        final basicAuth =
+            'Basic ${base64Encode(utf8.encode('${AppConfig.razorpayKeyId}:${AppConfig.razorpayKeySecret}'))}';
+        final rzpDio = Dio();
+        final amountInPaise = (amount * 100).round();
+        final rzpResponse = await rzpDio.post(
+          'https://api.razorpay.com/v1/payments/qr_codes',
+          options: Options(
+            headers: {
+              'Authorization': basicAuth,
+              'Content-Type': 'application/json',
+            },
+          ),
+          data: {
+            'type': 'upi_qr',
+            'name': AppConfig.appName,
+            'usage': 'single_use',
+            'fixed_amount': true,
+            'payment_amount': amountInPaise,
+            'description':
+                'Waste Collection Payment ${pickupId != null ? "#$pickupId" : ""}',
+            if (pickupId != null)
+              'notes': {
+                'pickup_id': pickupId.toString(),
+              },
+          },
+        );
+        if (rzpResponse.data is Map) {
+          final data = rzpResponse.data as Map;
+          return {
+            'qr_code_url': data['image_url'],
+            'qr_id': data['id'],
+            'order_id': data['id'],
+            ...data,
+          };
+        }
+      } catch (rzpErr) {
+        debugPrint('[ApiClient] Direct Razorpay QR error: $rzpErr');
+      }
       rethrow;
     }
   }
@@ -662,15 +753,20 @@ class ApiClient {
   Future<dynamic> verifyRazorpayPayment({
     required String orderId,
     String? paymentId,
+    String? signature,
     int? pickupId,
   }) async {
     try {
       final payload = {
         'order_id': orderId,
+        'key_id': AppConfig.razorpayKeyId,
+        'key_secret': AppConfig.razorpayKeySecret,
         if (paymentId != null) 'payment_id': paymentId,
+        if (signature != null) 'signature': signature,
         if (pickupId != null) 'pickup_id': pickupId,
       };
-      final response = await _dio.post('razorpay/verify-payment/', data: payload);
+      final response =
+          await _dio.post('razorpay/verify-payment/', data: payload);
       return response.data;
     } catch (e) {
       debugPrint('[ApiClient] verifyRazorpayPayment error: $e');

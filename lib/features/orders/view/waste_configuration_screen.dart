@@ -5,6 +5,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:provider/provider.dart';
 import 'package:suchigo_collector/features/home/view/home_screen.dart';
+import 'package:suchigo_collector/features/home/view_model/home_view_model.dart';
 import 'package:suchigo_collector/features/orders/view_model/waste_configuration_view_model.dart';
 import 'package:suchigo_collector/models/collector_model.dart';
 
@@ -31,7 +32,12 @@ class _WasteConfigurationScreenState extends State<WasteConfigurationScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        context.read<WasteConfigurationViewModel>().initForOrder(widget.order);
+        final homeVm = context.read<HomeViewModel>();
+        context.read<WasteConfigurationViewModel>().initForOrder(
+              widget.order,
+              selectedLocalBodyId: homeVm.selectedLocalBody?.id,
+              selectedLocalBodyName: homeVm.selectedLocalBody?.name,
+            );
       }
     });
   }
@@ -339,24 +345,38 @@ class _WasteConfigurationScreenState extends State<WasteConfigurationScreen> {
                                           height: 200.spMin,
                                           fit: BoxFit.contain,
                                         )
-                                      : Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Icon(
-                                              Icons.qr_code_2_rounded,
-                                              size: 130.spMin,
-                                              color: const Color(0xFF1D723C),
-                                            ),
-                                            Text(
-                                              "₹${wasteVm.finalTotal.toStringAsFixed(2)}",
-                                              style: TextStyle(
-                                                fontSize: 14.spMin,
-                                                fontWeight: FontWeight.w800,
-                                                color: const Color(0xFF135C30),
+                                      : (wasteVm.qrCodeUrl != null &&
+                                              wasteVm.qrCodeUrl!.isNotEmpty
+                                          ? Image.network(
+                                              wasteVm.qrCodeUrl!,
+                                              width: 200.spMin,
+                                              height: 200.spMin,
+                                              fit: BoxFit.contain,
+                                              errorBuilder: (_, __, ___) => Icon(
+                                                Icons.qr_code_2_rounded,
+                                                size: 130.spMin,
+                                                color: const Color(0xFF1D723C),
                                               ),
-                                            ),
-                                          ],
-                                        )),
+                                            )
+                                          : Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(
+                                                  Icons.qr_code_2_rounded,
+                                                  size: 130.spMin,
+                                                  color: const Color(0xFF1D723C),
+                                                ),
+                                                Text(
+                                                  "₹${wasteVm.finalTotal.toStringAsFixed(2)}",
+                                                  style: TextStyle(
+                                                    fontSize: 14.spMin,
+                                                    fontWeight: FontWeight.w800,
+                                                    color:
+                                                        const Color(0xFF135C30),
+                                                  ),
+                                                ),
+                                              ],
+                                            ))),
                             ),
                           ),
                           SizedBox(height: 14.spMin),
@@ -618,11 +638,13 @@ class _WasteConfigurationScreenState extends State<WasteConfigurationScreen> {
   @override
   Widget build(BuildContext context) {
     final wasteVm = context.watch<WasteConfigurationViewModel>();
-    final locationName = widget.order.ward?.isNotEmpty == true
-        ? widget.order.ward!
-        : (widget.order.localBody?.isNotEmpty == true
-            ? widget.order.localBody!
-            : "Alangad Panchayat");
+    final locationName = widget.order.localBody?.isNotEmpty == true
+        ? widget.order.localBody!
+        : (wasteVm.disposalLocationName?.isNotEmpty == true
+            ? wasteVm.disposalLocationName!
+            : (widget.order.ward?.isNotEmpty == true
+                ? widget.order.ward!
+                : "Alangad Panchayat"));
 
     return Scaffold(
       backgroundColor: const Color(0xFFF4FAF2),

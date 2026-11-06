@@ -9,7 +9,11 @@ class UrlHelpers {
   }
 
   static String get key {
-    return '';
+    return AppConfig.razorpayKeyId;
+  }
+
+  static String get secret {
+    return AppConfig.razorpayKeySecret;
   }
 
   static String get baseUrlApi {

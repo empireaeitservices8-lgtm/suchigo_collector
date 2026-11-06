@@ -20,6 +20,7 @@ import 'features/wards/view_model/ward_view_model.dart';
 import 'features/splashscreen/view/splashscreen.dart';
 import 'providers/language_provider.dart';
 import 'providers/theme_provider.dart';
+import 'services/notification_service.dart';
 import 'utils/interceptors.dart';
 import 'utils/localization.dart';
 import 'utils/routes.dart';
@@ -27,6 +28,7 @@ import 'utils/themes.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await NotificationService().initialize();
   runApp(const MyApp());
 }
 

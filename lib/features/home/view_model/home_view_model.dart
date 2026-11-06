@@ -169,9 +169,7 @@ class HomeViewModel extends ChangeNotifier {
   }
 
   Future<bool> saveProfile() async {
-    if (_selectedDistrict == null ||
-        _selectedLocalBody == null ||
-        _selectedWard == null) {
+    if (_selectedDistrict == null || _selectedLocalBody == null) {
       return false;
     }
 
@@ -179,14 +177,21 @@ class HomeViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      await SpHelper.saveString(
-          'profile_saved_ward', _selectedWard!.displayName);
-      await SpHelper.saveString(
-          'profile_saved_ward_number', _selectedWard!.wardNumber ?? '1');
+      if (_selectedWard != null) {
+        await SpHelper.saveString(
+            'profile_saved_ward', _selectedWard!.displayName);
+        await SpHelper.saveString(
+            'profile_saved_ward_number', _selectedWard!.wardNumber ?? '1');
+      } else {
+        await SpHelper.remove('profile_saved_ward');
+        await SpHelper.remove('profile_saved_ward_number');
+      }
       await SpHelper.saveString(
           'profile_saved_district', _selectedDistrict!.name);
       await SpHelper.saveString(
           'profile_saved_localbody', _selectedLocalBody!.name);
+      await SpHelper.saveString(
+          'profile_saved_localbody_id', _selectedLocalBody!.id.toString());
 
       _isSavingProfile = false;
       _isProfileRecentlySaved = true;

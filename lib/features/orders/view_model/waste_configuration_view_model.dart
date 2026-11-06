@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:suchigo_collector/helpers/sp_helper.dart';
 import 'package:suchigo_collector/models/collector_model.dart';
 import 'package:suchigo_collector/services/api_client.dart';
 
@@ -34,12 +35,15 @@ class WasteConfigurationViewModel extends ChangeNotifier {
   };
 
   double _ratePerKg = 42.0;
+  String? _disposalLocationName;
   double _enteredWeight = 0.0;
   final double _walletBalance = 80.0;
   bool _redeemWallet = false;
 
   String _paymentMode = 'online'; // 'cash' or 'online'
   String? _qrCodeBase64;
+  String? _qrCodeUrl;
+  String? _razorpayOrderId;
   bool _isLoadingQr = false;
   bool _isProcessingPayment = false;
 
@@ -51,11 +55,14 @@ class WasteConfigurationViewModel extends ChangeNotifier {
   List<Map<String, dynamic>> get availableBags => _availableBags;
   Map<String, double> get bagPrices => _bagPrices;
   double get ratePerKg => _ratePerKg;
+  String? get disposalLocationName => _disposalLocationName;
   double get enteredWeight => _enteredWeight;
   double get walletBalance => _walletBalance;
   bool get redeemWallet => _redeemWallet;
   String get paymentMode => _paymentMode;
   String? get qrCodeBase64 => _qrCodeBase64;
+  String? get qrCodeUrl => _qrCodeUrl;
+  String? get razorpayOrderId => _razorpayOrderId;
   bool get isLoadingQr => _isLoadingQr;
   bool get isProcessingPayment => _isProcessingPayment;
 
@@ -136,7 +143,6 @@ class WasteConfigurationViewModel extends ChangeNotifier {
   }
 
   Future<void> fetchQrCode(int pickupId) async {
-    if (_qrCodeBase64 != null) return;
     _isLoadingQr = true;
     notifyListeners();
     try {
@@ -145,7 +151,11 @@ class WasteConfigurationViewModel extends ChangeNotifier {
         pickupId: pickupId,
       );
       if (res is Map) {
-        _qrCodeBase64 = res['qr_code']?.toString();
+        _qrCodeBase64 = res['qr_code']?.toString() ?? res['qr_image']?.toString();
+        _qrCodeUrl =
+            res['qr_code_url']?.toString() ?? res['image_url']?.toString();
+        _razorpayOrderId =
+            res['order_id']?.toString() ?? res['qr_id']?.toString();
       }
     } catch (e) {
       debugPrint('[WasteConfig] QR Code fetch error: $e');
@@ -165,6 +175,12 @@ class WasteConfigurationViewModel extends ChangeNotifier {
     _isProcessingPayment = true;
     notifyListeners();
     try {
+      if (_paymentMode == 'online' && _razorpayOrderId != null) {
+        await _apiClient.verifyRazorpayPayment(
+          orderId: _razorpayOrderId!,
+          pickupId: pickupId,
+        );
+      }
       await _apiClient.generateBill(
         pickupId: pickupId,
         weight: enteredWeight,
@@ -228,19 +244,33 @@ class WasteConfigurationViewModel extends ChangeNotifier {
     return name;
   }
 
-  Future<void> initForOrder(LocationPickupModel order) async {
+  Future<void> initForOrder(
+    LocationPickupModel order, {
+    int? selectedLocalBodyId,
+    String? selectedLocalBodyName,
+  }) async {
     _isLoading = true;
     _enteredWeight = 0.0;
     _bagQuantities.clear();
     _selectedWasteTypes.clear();
     _redeemWallet = false;
+    _qrCodeBase64 = null;
+    _qrCodeUrl = null;
+    _razorpayOrderId = null;
     notifyListeners();
 
     try {
+      final savedLocalBodyName =
+          await SpHelper.getString('profile_saved_localbody');
+      final savedLocalBodyIdStr =
+          await SpHelper.getString('profile_saved_localbody_id');
+      final effectiveLocalBodyId =
+          selectedLocalBodyId ?? int.tryParse(savedLocalBodyIdStr ?? '');
+
       final results = await Future.wait([
         _apiClient.getBags(),
         _apiClient.getWasteTypes(),
-        _apiClient.getDisposalRates(),
+        _apiClient.getDisposalRates(localBodyId: effectiveLocalBodyId),
       ]);
 
       final bags = results[0] as List<BagModel>;
@@ -272,7 +302,53 @@ class WasteConfigurationViewModel extends ChangeNotifier {
       }
 
       if (rates.isNotEmpty) {
-        _ratePerKg = rates.first.ratePerKg;
+        DisposalRateModel? matchedRate;
+
+        // 1. Match by local_body_id if known
+        if (effectiveLocalBodyId != null) {
+          for (final r in rates) {
+            if (r.localBodyId == effectiveLocalBodyId) {
+              matchedRate = r;
+              break;
+            }
+          }
+        }
+
+        // 2. Match by local body name from order, selected profile, saved profile, or default ("Alangad Panchayat")
+        if (matchedRate == null) {
+          final candidateNames = <String>[
+            if (order.localBody != null && order.localBody!.trim().isNotEmpty)
+              order.localBody!.trim(),
+            if (selectedLocalBodyName != null &&
+                selectedLocalBodyName.trim().isNotEmpty)
+              selectedLocalBodyName.trim(),
+            if (savedLocalBodyName != null &&
+                savedLocalBodyName.trim().isNotEmpty)
+              savedLocalBodyName.trim(),
+            if (order.ward != null && order.ward!.trim().isNotEmpty)
+              order.ward!.trim(),
+            'Alangad Panchayat',
+          ];
+
+          for (final candidate in candidateNames) {
+            final lowerCandidate = candidate.toLowerCase();
+            for (final r in rates) {
+              final rName = r.localBodyName?.trim().toLowerCase() ?? '';
+              if (rName.isEmpty) continue;
+              if (rName == lowerCandidate ||
+                  rName.contains(lowerCandidate) ||
+                  lowerCandidate.contains(rName)) {
+                matchedRate = r;
+                break;
+              }
+            }
+            if (matchedRate != null) break;
+          }
+        }
+
+        matchedRate ??= rates.first;
+        _ratePerKg = matchedRate.ratePerKg;
+        _disposalLocationName = matchedRate.localBodyName;
       }
 
       if (order.wasteType?.isNotEmpty == true) {
