@@ -6,6 +6,21 @@ class CollectorModel {
   final String phone;
   final String? vehicleName;
   final String? vehicleNumber;
+  final int totalPickups;
+  final double totalQuantity;
+  final double totalRevenue;
+  final double cashCollected;
+  final double onlineCollected;
+  final int pickups;
+  final double quantity;
+  final double revenue;
+  final String? district;
+  final int? districtId;
+  final String? localBody;
+  final int? localBodyId;
+  final String? localBodyName;
+  final String? ward;
+  final bool? isActive;
 
   CollectorModel({
     required this.id,
@@ -15,9 +30,77 @@ class CollectorModel {
     required this.phone,
     this.vehicleName,
     this.vehicleNumber,
+    this.totalPickups = 0,
+    this.totalQuantity = 0.0,
+    this.totalRevenue = 0.0,
+    this.cashCollected = 0.0,
+    this.onlineCollected = 0.0,
+    this.pickups = 0,
+    this.quantity = 0.0,
+    this.revenue = 0.0,
+    this.district,
+    this.districtId,
+    this.localBody,
+    this.localBodyId,
+    this.localBodyName,
+    this.ward,
+    this.isActive,
   });
 
   factory CollectorModel.fromJson(Map<String, dynamic> json) {
+    final int totalP = json['total_pickups'] is int
+        ? json['total_pickups'] as int
+        : (json['pickups'] is int
+            ? json['pickups'] as int
+            : int.tryParse(json['total_pickups']?.toString() ??
+                    json['pickups']?.toString() ??
+                    '') ??
+                0);
+
+    final double totalQ = json['total_quantity'] != null
+        ? (double.tryParse(json['total_quantity'].toString()) ?? 0.0)
+        : (json['total_waste'] != null
+            ? (double.tryParse(json['total_waste'].toString()) ?? 0.0)
+            : (json['quantity'] != null
+                ? (double.tryParse(json['quantity'].toString()) ?? 0.0)
+                : 0.0));
+
+    final double totalR = json['total_revenue'] != null
+        ? (double.tryParse(json['total_revenue'].toString()) ?? 0.0)
+        : (json['revenue'] != null
+            ? (double.tryParse(json['revenue'].toString()) ?? 0.0)
+            : 0.0);
+
+    final double cash = json['cash_collected'] != null
+        ? (double.tryParse(json['cash_collected'].toString()) ?? 0.0)
+        : 0.0;
+
+    final double online = json['online_collected'] != null
+        ? (double.tryParse(json['online_collected'].toString()) ?? 0.0)
+        : 0.0;
+
+    final String? dist = json['district']?.toString();
+    final int? distId = json['district_id'] is int
+        ? json['district_id'] as int
+        : int.tryParse(json['district_id']?.toString() ?? '');
+
+    final String? lb = json['local_body']?.toString() ??
+        json['localbody']?.toString();
+    final int? lbId = json['local_body_id'] is int
+        ? json['local_body_id'] as int
+        : int.tryParse(json['local_body_id']?.toString() ?? '');
+    final String? lbName = json['local_body_name']?.toString() ??
+        json['local_body']?.toString() ??
+        json['localbody']?.toString();
+
+    final String? w = json['ward']?.toString();
+
+    final bool? act = json['is_active'] is bool
+        ? json['is_active'] as bool
+        : (json['is_active'] != null
+            ? (json['is_active'].toString().toLowerCase() == 'true')
+            : null);
+
     return CollectorModel(
       id: json['id'] is int
           ? json['id']
@@ -28,6 +111,27 @@ class CollectorModel {
       phone: json['phone']?.toString() ?? '',
       vehicleName: json['vehicle_name']?.toString(),
       vehicleNumber: json['vehicle_number']?.toString(),
+      totalPickups: totalP,
+      totalQuantity: totalQ,
+      totalRevenue: totalR,
+      cashCollected: cash,
+      onlineCollected: online,
+      pickups: json['pickups'] is int
+          ? json['pickups'] as int
+          : int.tryParse(json['pickups']?.toString() ?? '') ?? totalP,
+      quantity: json['quantity'] != null
+          ? (double.tryParse(json['quantity'].toString()) ?? totalQ)
+          : totalQ,
+      revenue: json['revenue'] != null
+          ? (double.tryParse(json['revenue'].toString()) ?? totalR)
+          : totalR,
+      district: dist,
+      districtId: distId,
+      localBody: lb,
+      localBodyId: lbId,
+      localBodyName: lbName,
+      ward: w,
+      isActive: act,
     );
   }
 
@@ -40,6 +144,21 @@ class CollectorModel {
       'phone': phone,
       'vehicle_name': vehicleName,
       'vehicle_number': vehicleNumber,
+      'total_pickups': totalPickups,
+      'total_quantity': totalQuantity,
+      'total_revenue': totalRevenue,
+      'cash_collected': cashCollected,
+      'online_collected': onlineCollected,
+      'pickups': pickups,
+      'quantity': quantity,
+      'revenue': revenue,
+      'district': district,
+      'district_id': districtId,
+      'local_body': localBody,
+      'local_body_id': localBodyId,
+      'local_body_name': localBodyName,
+      'ward': ward,
+      'is_active': isActive,
     };
   }
 
@@ -51,6 +170,21 @@ class CollectorModel {
     String? phone,
     String? vehicleName,
     String? vehicleNumber,
+    int? totalPickups,
+    double? totalQuantity,
+    double? totalRevenue,
+    double? cashCollected,
+    double? onlineCollected,
+    int? pickups,
+    double? quantity,
+    double? revenue,
+    String? district,
+    int? districtId,
+    String? localBody,
+    int? localBodyId,
+    String? localBodyName,
+    String? ward,
+    bool? isActive,
   }) {
     return CollectorModel(
       id: id ?? this.id,
@@ -60,6 +194,21 @@ class CollectorModel {
       phone: phone ?? this.phone,
       vehicleName: vehicleName ?? this.vehicleName,
       vehicleNumber: vehicleNumber ?? this.vehicleNumber,
+      totalPickups: totalPickups ?? this.totalPickups,
+      totalQuantity: totalQuantity ?? this.totalQuantity,
+      totalRevenue: totalRevenue ?? this.totalRevenue,
+      cashCollected: cashCollected ?? this.cashCollected,
+      onlineCollected: onlineCollected ?? this.onlineCollected,
+      pickups: pickups ?? this.pickups,
+      quantity: quantity ?? this.quantity,
+      revenue: revenue ?? this.revenue,
+      district: district ?? this.district,
+      districtId: districtId ?? this.districtId,
+      localBody: localBody ?? this.localBody,
+      localBodyId: localBodyId ?? this.localBodyId,
+      localBodyName: localBodyName ?? this.localBodyName,
+      ward: ward ?? this.ward,
+      isActive: isActive ?? this.isActive,
     );
   }
 }
@@ -194,6 +343,12 @@ class LocationPickupModel {
   final double quantityKg;
   final String? paymentMethod;
   final String? scheduleCode;
+  final double? bagRate;
+  final String? dayOfWeek;
+  final String? pickupDateDisplay;
+  final String? pickupDay;
+  final int? calendarDate;
+  final double? walletBalance;
 
   LocationPickupModel({
     required this.id,
@@ -220,20 +375,41 @@ class LocationPickupModel {
     this.quantityKg = 0.0,
     this.paymentMethod,
     this.scheduleCode,
+    this.bagRate,
+    this.dayOfWeek,
+    this.pickupDateDisplay,
+    this.pickupDay,
+    this.calendarDate,
+    this.walletBalance,
   });
 
   factory LocationPickupModel.fromJson(Map<String, dynamic> json) {
     return LocationPickupModel(
       id: json['id'] is int
           ? json['id']
-          : int.tryParse(json['id'].toString()) ?? 0,
+          : (int.tryParse(json['id']?.toString() ?? '') ??
+              (json['location_id'] is int
+                  ? json['location_id']
+                  : int.tryParse(json['location_id']?.toString() ?? '') ?? 0)),
       pickupId: json['pickup_id'] is int
           ? json['pickup_id']
           : int.tryParse(json['pickup_id']?.toString() ?? ''),
-      name: json['name']?.toString() ?? '',
+      name: json['name']?.toString() ??
+          json['user_name']?.toString() ??
+          json['customer_name']?.toString() ??
+          '',
       email: json['email']?.toString(),
-      contactNumber: json['contact_number']?.toString(),
-      street: json['street']?.toString(),
+      contactNumber: json['contact_number']?.toString() ??
+          json['customer_number']?.toString() ??
+          json['customer_phone']?.toString() ??
+          json['phone']?.toString() ??
+          json['mobile']?.toString() ??
+          json['phone_number']?.toString() ??
+          json['user_phone']?.toString() ??
+          json['contact']?.toString(),
+      street: json['street']?.toString() ??
+          json['address']?.toString() ??
+          json['delivery_address']?.toString(),
       city: json['city']?.toString(),
       state: json['state']?.toString(),
       district: json['district']?.toString(),
@@ -244,27 +420,35 @@ class LocationPickupModel {
           json['localbody']?.toString() ??
           json['local_body_name']?.toString(),
       landmark: json['landmark']?.toString(),
-      pickupDate: json['pickup_date']?.toString(),
+      pickupDate: json['pickup_date']?.toString() ??
+          json['date']?.toString() ??
+          json['collection_date']?.toString() ??
+          json['scheduled_date']?.toString(),
       pickupTimeSlot: json['pickup_time_slot']?.toString(),
-      wasteType: json['waste_type']?.toString(),
+      wasteType: json['waste_type']?.toString() ??
+          json['waste_category']?.toString(),
       itemsDescription: json['items_description']?.toString(),
       status: json['status']?.toString(),
       vehicleName: json['vehicle_name']?.toString(),
       vehicleNumber: json['vehicle_number']?.toString(),
       amount: json['amount'] != null
           ? (double.tryParse(json['amount'].toString()) ?? 0.0)
-          : (json['total_amount'] != null
-              ? (double.tryParse(json['total_amount'].toString()) ?? 0.0)
-              : (json['rate'] != null
-                  ? (double.tryParse(json['rate'].toString()) ?? 0.0)
-                  : 0.0)),
+          : (json['amount_collected'] != null
+              ? (double.tryParse(json['amount_collected'].toString()) ?? 0.0)
+              : (json['total_amount'] != null
+                  ? (double.tryParse(json['total_amount'].toString()) ?? 0.0)
+                  : (json['rate'] != null
+                      ? (double.tryParse(json['rate'].toString()) ?? 0.0)
+                      : 0.0))),
       quantityKg: json['quantity_kg'] != null
           ? (double.tryParse(json['quantity_kg'].toString()) ?? 0.0)
-          : (json['quantity'] != null
-              ? (double.tryParse(json['quantity'].toString()) ?? 0.0)
-              : (json['weight'] != null
-                  ? (double.tryParse(json['weight'].toString()) ?? 0.0)
-                  : 0.0)),
+          : (json['weight_kg'] != null
+              ? (double.tryParse(json['weight_kg'].toString()) ?? 0.0)
+              : (json['quantity'] != null
+                  ? (double.tryParse(json['quantity'].toString()) ?? 0.0)
+                  : (json['weight'] != null
+                      ? (double.tryParse(json['weight'].toString()) ?? 0.0)
+                      : 0.0))),
       paymentMethod: json['payment_method']?.toString() ??
           json['payment_mode']?.toString() ??
           json['payment_type']?.toString(),
@@ -274,7 +458,33 @@ class LocationPickupModel {
           json['bill_id']?.toString() ??
           (json['pickup_id'] != null
               ? 'BILL-${json['pickup_id']}'
-              : (json['id'] != null ? 'BILL-${json['id']}' : null)),
+              : (json['id'] != null
+                  ? 'BILL-${json['id']}'
+                  : (json['location_id'] != null
+                      ? 'BILL-${json['location_id']}'
+                      : null))),
+      bagRate: json['bag_rate'] != null
+          ? (double.tryParse(json['bag_rate'].toString()) ?? 0.0)
+          : (json['bag_price'] != null
+              ? (double.tryParse(json['bag_price'].toString()) ?? 0.0)
+              : (json['bag_amount'] != null
+                  ? (double.tryParse(json['bag_amount'].toString()) ?? 0.0)
+                  : (json['rate'] != null
+                      ? (double.tryParse(json['rate'].toString()) ?? 0.0)
+                      : null))),
+      dayOfWeek: json['day_of_week']?.toString() ??
+          json['pickup_day']?.toString() ??
+          json['day']?.toString(),
+      pickupDateDisplay: json['pickup_date_display']?.toString(),
+      pickupDay: json['pickup_day']?.toString() ?? json['day']?.toString(),
+      calendarDate: json['calendar_date'] is int
+          ? json['calendar_date']
+          : int.tryParse(json['calendar_date']?.toString() ?? ''),
+      walletBalance: json['wallet_balance'] != null
+          ? (double.tryParse(json['wallet_balance'].toString()) ?? 0.0)
+          : (json['wallet'] != null
+              ? (double.tryParse(json['wallet'].toString()) ?? 0.0)
+              : null),
     );
   }
 
@@ -299,6 +509,11 @@ class LocationPickupModel {
         'status': status,
         'vehicle_name': vehicleName,
         'vehicle_number': vehicleNumber,
+        'day_of_week': dayOfWeek,
+        'pickup_date_display': pickupDateDisplay,
+        'pickup_day': pickupDay,
+        'calendar_date': calendarDate,
+        'wallet_balance': walletBalance,
       };
 
   LocationPickupModel copyWith({
@@ -322,6 +537,16 @@ class LocationPickupModel {
     String? status,
     String? vehicleName,
     String? vehicleNumber,
+    double? amount,
+    double? quantityKg,
+    String? paymentMethod,
+    String? scheduleCode,
+    double? bagRate,
+    String? dayOfWeek,
+    String? pickupDateDisplay,
+    String? pickupDay,
+    int? calendarDate,
+    double? walletBalance,
   }) {
     return LocationPickupModel(
       id: id ?? this.id,
@@ -344,6 +569,16 @@ class LocationPickupModel {
       status: status ?? this.status,
       vehicleName: vehicleName ?? this.vehicleName,
       vehicleNumber: vehicleNumber ?? this.vehicleNumber,
+      amount: amount ?? this.amount,
+      quantityKg: quantityKg ?? this.quantityKg,
+      paymentMethod: paymentMethod ?? this.paymentMethod,
+      scheduleCode: scheduleCode ?? this.scheduleCode,
+      bagRate: bagRate ?? this.bagRate,
+      dayOfWeek: dayOfWeek ?? this.dayOfWeek,
+      pickupDateDisplay: pickupDateDisplay ?? this.pickupDateDisplay,
+      pickupDay: pickupDay ?? this.pickupDay,
+      calendarDate: calendarDate ?? this.calendarDate,
+      walletBalance: walletBalance ?? this.walletBalance,
     );
   }
 }
@@ -353,12 +588,18 @@ class WardModel {
   final String name;
   final String? wardNumber;
   final int? localbody;
+  final String? localBodyName;
+  final int? pendingCount;
+  final int? count;
 
   WardModel({
     required this.id,
     required this.name,
     this.wardNumber,
     this.localbody,
+    this.localBodyName,
+    this.pendingCount,
+    this.count,
   });
 
   String get displayName => formatWardName(name, wardNumber, id);
@@ -370,7 +611,7 @@ class WardModel {
         ? rawWardNumber.trim()
         : null;
 
-    // Check if name has pattern like "Ward 1 - Neericode West" or "Ward 1: Neericode West"
+    // Check if name has pattern like "Ward 1 - Ward Name" or "Ward 1: Ward Name"
     final wardPrefixMatch =
         RegExp(r'^Ward\s*(\d+)\s*[-:]*\s*(.*)$', caseSensitive: false)
             .firstMatch(name);
@@ -382,7 +623,7 @@ class WardModel {
       }
     }
 
-    // Check if name has pattern like "1 - Neericode West" or "1-Neericode West"
+    // Check if name has pattern like "1 - Ward Name" or "1-Ward Name"
     final dashPrefixMatch = RegExp(r'^(\d+)\s*[-:]\s*(.+)$').firstMatch(name);
     if (dashPrefixMatch != null) {
       numStr ??= dashPrefixMatch.group(1);
@@ -406,6 +647,17 @@ class WardModel {
   }
 
   factory WardModel.fromJson(Map<String, dynamic> json) {
+    final rawPending = json['pending_count'] ?? json['count'];
+    final pendingVal = rawPending is int
+        ? rawPending
+        : int.tryParse(rawPending?.toString() ?? '');
+
+    final rawLocalBodyId =
+        json['local_body_id'] ?? json['localbody'] ?? json['local_body'];
+    final localBodyIdVal = rawLocalBodyId is int
+        ? rawLocalBodyId
+        : int.tryParse(rawLocalBodyId?.toString() ?? '');
+
     return WardModel(
       id: json['id'] is int
           ? json['id']
@@ -419,13 +671,15 @@ class WardModel {
           json['number']?.toString() ??
           json['ward_no']?.toString() ??
           json['wardNo']?.toString(),
-      localbody: json['localbody'] is int
-          ? json['localbody']
-          : (json['local_body'] is int
-              ? json['local_body']
-              : int.tryParse(json['localbody']?.toString() ??
-                  json['local_body']?.toString() ??
-                  '')),
+      localbody: localBodyIdVal,
+      localBodyName: json['local_body_name']?.toString() ??
+          (json['local_body'] is String
+              ? json['local_body']?.toString()
+              : null),
+      pendingCount: pendingVal,
+      count: json['count'] is int
+          ? json['count']
+          : int.tryParse(json['count']?.toString() ?? '') ?? pendingVal,
     );
   }
 
@@ -434,6 +688,9 @@ class WardModel {
         'name': name,
         if (wardNumber != null) 'ward_number': wardNumber,
         if (localbody != null) 'localbody': localbody,
+        if (localBodyName != null) 'local_body_name': localBodyName,
+        if (pendingCount != null) 'pending_count': pendingCount,
+        if (count != null) 'count': count,
       };
 
   @override
@@ -639,6 +896,8 @@ class AdminDashboardStatisticsModel {
   final int completedPickups;
   final int totalBills;
   final double pendingCash;
+  final double totalCash;
+  final double totalOnline;
   final double totalRevenue;
 
   AdminDashboardStatisticsModel({
@@ -649,6 +908,8 @@ class AdminDashboardStatisticsModel {
     required this.completedPickups,
     required this.totalBills,
     required this.pendingCash,
+    this.totalCash = 0.0,
+    this.totalOnline = 0.0,
     required this.totalRevenue,
   });
 
@@ -674,6 +935,16 @@ class AdminDashboardStatisticsModel {
           : int.tryParse(json['total_bills']?.toString() ?? '') ?? 0,
       pendingCash:
           double.tryParse(json['pending_cash']?.toString() ?? '') ?? 0.0,
+      totalCash: json['total_cash'] != null
+          ? (double.tryParse(json['total_cash'].toString()) ?? 0.0)
+          : (json['cash'] != null
+              ? (double.tryParse(json['cash'].toString()) ?? 0.0)
+              : 0.0),
+      totalOnline: json['total_online'] != null
+          ? (double.tryParse(json['total_online'].toString()) ?? 0.0)
+          : (json['online'] != null
+              ? (double.tryParse(json['online'].toString()) ?? 0.0)
+              : 0.0),
       totalRevenue:
           double.tryParse(json['total_revenue']?.toString() ?? '') ?? 0.0,
     );
@@ -687,6 +958,8 @@ class AdminDashboardStatisticsModel {
         'completed_pickups': completedPickups,
         'total_bills': totalBills,
         'pending_cash': pendingCash,
+        'total_cash': totalCash,
+        'total_online': totalOnline,
         'total_revenue': totalRevenue,
       };
 }
@@ -713,6 +986,8 @@ class AdminDashboardModel {
               completedPickups: 0,
               totalBills: 0,
               pendingCash: 0,
+              totalCash: 0,
+              totalOnline: 0,
               totalRevenue: 0,
             ),
       recentLocations: json['recent_locations'] is List
@@ -734,20 +1009,28 @@ class AdminCollectorHistoryModel {
   final CollectorModel collector;
   final List<dynamic> bagAssignments;
   final int totalBagAssignments;
+  final int assignedBagCount;
   final List<LocationPickupModel> locations;
+  final String district;
+  final String localBody;
+  final String ward;
 
   AdminCollectorHistoryModel({
     required this.collector,
     required this.bagAssignments,
     required this.totalBagAssignments,
+    this.assignedBagCount = 0,
     required this.locations,
+    this.district = '',
+    this.localBody = '',
+    this.ward = '',
   });
 
   factory AdminCollectorHistoryModel.fromJson(Map<String, dynamic> json) {
     CollectorModel col;
-    if (json.containsKey('collector') &&
-        json['collector'] is Map<String, dynamic>) {
-      col = CollectorModel.fromJson(json['collector'] as Map<String, dynamic>);
+    if (json.containsKey('collector') && json['collector'] is Map) {
+      col = CollectorModel.fromJson(
+          Map<String, dynamic>.from(json['collector'] as Map));
     } else {
       col = CollectorModel.fromJson(json);
     }
@@ -761,9 +1044,7 @@ class AdminCollectorHistoryModel {
     final locationsList = rawLocations is List
         ? rawLocations
             .map((item) {
-              if (item is Map<String, dynamic>) {
-                return LocationPickupModel.fromJson(item);
-              } else if (item is Map) {
+              if (item is Map) {
                 return LocationPickupModel.fromJson(
                     Map<String, dynamic>.from(item));
               }
@@ -780,7 +1061,7 @@ class AdminCollectorHistoryModel {
     int sumBagCounts = 0;
     for (final item in bags) {
       if (item is Map) {
-        final count = item['bag_count'];
+        final count = item['bag_count'] ?? item['count'] ?? item['bags'];
         if (count != null) {
           sumBagCounts +=
               (count is int ? count : int.tryParse(count.toString()) ?? 0);
@@ -788,16 +1069,54 @@ class AdminCollectorHistoryModel {
       }
     }
 
-    final totalBags = json['total_bag_assignments'] is int
-        ? json['total_bag_assignments'] as int
-        : (int.tryParse(json['total_bag_assignments']?.toString() ?? '') ??
-            (sumBagCounts > 0 ? sumBagCounts : bags.length));
+    final int assignedBagCount = sumBagCounts;
+    final int totalBags = sumBagCounts > 0
+        ? sumBagCounts
+        : (json['total_bag_assignments'] is int
+            ? json['total_bag_assignments'] as int
+            : (int.tryParse(json['total_bag_assignments']?.toString() ?? '') ??
+                0));
+
+    // Resolve District, Local Body, and Ward directly from collector object
+    final collectorMap =
+        json['collector'] is Map ? (json['collector'] as Map) : null;
+    final String resolvedDistrict = (collectorMap?['district'] != null &&
+            collectorMap!['district'].toString().trim().isNotEmpty)
+        ? collectorMap['district'].toString().trim()
+        : ((col.district != null && col.district!.trim().isNotEmpty)
+            ? col.district!.trim()
+            : (json['district']?.toString().trim() ?? ''));
+
+    final String resolvedLocalBody = (collectorMap?['local_body_name'] != null &&
+            collectorMap!['local_body_name'].toString().trim().isNotEmpty)
+        ? collectorMap['local_body_name'].toString().trim()
+        : ((collectorMap?['local_body'] != null &&
+                collectorMap!['local_body'].toString().trim().isNotEmpty)
+            ? collectorMap['local_body'].toString().trim()
+            : ((col.localBodyName != null && col.localBodyName!.trim().isNotEmpty)
+                ? col.localBodyName!.trim()
+                : ((col.localBody != null && col.localBody!.trim().isNotEmpty)
+                    ? col.localBody!.trim()
+                    : (json['local_body_name']?.toString().trim() ??
+                        json['local_body']?.toString().trim() ??
+                        ''))));
+
+    final String resolvedWard = (collectorMap?['ward'] != null &&
+            collectorMap!['ward'].toString().trim().isNotEmpty)
+        ? collectorMap['ward'].toString().trim()
+        : ((col.ward != null && col.ward!.trim().isNotEmpty)
+            ? col.ward!.trim()
+            : (json['ward']?.toString().trim() ?? ''));
 
     return AdminCollectorHistoryModel(
       collector: col,
       bagAssignments: bags,
       totalBagAssignments: totalBags,
+      assignedBagCount: assignedBagCount,
       locations: locationsList,
+      district: resolvedDistrict,
+      localBody: resolvedLocalBody,
+      ward: resolvedWard,
     );
   }
 }
@@ -869,4 +1188,174 @@ class VehicleNumberItem {
 
   @override
   int get hashCode => Object.hash(id, number);
+}
+
+class CollectorOverviewModel {
+  final CollectorModel? collector;
+  final OverviewSummaryModel overview;
+  final List<DailySummaryItemModel> dailySummary;
+  final List<LocationPickupModel> completedRecords;
+
+  CollectorOverviewModel({
+    this.collector,
+    required this.overview,
+    required this.dailySummary,
+    required this.completedRecords,
+  });
+
+  factory CollectorOverviewModel.fromJson(Map<String, dynamic> json) {
+    return CollectorOverviewModel(
+      collector: json['collector'] is Map<String, dynamic>
+          ? CollectorModel.fromJson(json['collector'] as Map<String, dynamic>)
+          : null,
+      overview: json['overview'] is Map<String, dynamic>
+          ? OverviewSummaryModel.fromJson(
+              json['overview'] as Map<String, dynamic>)
+          : OverviewSummaryModel.empty(),
+      dailySummary: (json['daily_summary'] is List)
+          ? (json['daily_summary'] as List)
+              .whereType<Map<String, dynamic>>()
+              .map((e) => DailySummaryItemModel.fromJson(e))
+              .toList()
+          : [],
+      completedRecords: (json['completed_records'] is List)
+          ? (json['completed_records'] as List)
+              .whereType<Map<String, dynamic>>()
+              .map((e) => LocationPickupModel.fromJson(e))
+              .toList()
+          : [],
+    );
+  }
+
+  factory CollectorOverviewModel.empty() {
+    return CollectorOverviewModel(
+      collector: null,
+      overview: OverviewSummaryModel.empty(),
+      dailySummary: [],
+      completedRecords: [],
+    );
+  }
+}
+
+class OverviewSummaryModel {
+  final int totalOrders;
+  final double totalQuantityKg;
+  final double totalAmountCollected;
+  final double vehicleCapacityKg;
+  final double vehicleCapacityUsedKg;
+  final Map<String, double> categoryQuantities;
+
+  OverviewSummaryModel({
+    required this.totalOrders,
+    required this.totalQuantityKg,
+    required this.totalAmountCollected,
+    this.vehicleCapacityKg = 500.0,
+    this.vehicleCapacityUsedKg = 0.0,
+    this.categoryQuantities = const {},
+  });
+
+  factory OverviewSummaryModel.fromJson(Map<String, dynamic> json) {
+    final orders = json['total_orders'] is int
+        ? json['total_orders'] as int
+        : int.tryParse(json['total_orders']?.toString() ?? '') ?? 0;
+
+    final qty = json['total_quantity_kg'] != null
+        ? (double.tryParse(json['total_quantity_kg'].toString()) ?? 0.0)
+        : (json['quantity_kg'] != null
+            ? (double.tryParse(json['quantity_kg'].toString()) ?? 0.0)
+            : (json['quantity'] != null
+                ? (double.tryParse(json['quantity'].toString()) ?? 0.0)
+                : 0.0));
+
+    final amount = json['total_amount_collected'] != null
+        ? (double.tryParse(json['total_amount_collected'].toString()) ?? 0.0)
+        : (json['total_amount'] != null
+            ? (double.tryParse(json['total_amount'].toString()) ?? 0.0)
+            : (json['amount'] != null
+                ? (double.tryParse(json['amount'].toString()) ?? 0.0)
+                : 0.0));
+
+    final capacity = json['vehicle_capacity_kg'] != null
+        ? (double.tryParse(json['vehicle_capacity_kg'].toString()) ?? 500.0)
+        : 500.0;
+
+    final used = json['vehicle_capacity_used_kg'] != null
+        ? (double.tryParse(json['vehicle_capacity_used_kg'].toString()) ?? qty)
+        : qty;
+
+    final Map<String, double> categories = {};
+    if (json['category_quantities'] is Map) {
+      (json['category_quantities'] as Map).forEach((k, v) {
+        categories[k.toString()] = double.tryParse(v.toString()) ?? 0.0;
+      });
+    }
+
+    return OverviewSummaryModel(
+      totalOrders: orders,
+      totalQuantityKg: qty,
+      totalAmountCollected: amount,
+      vehicleCapacityKg: capacity,
+      vehicleCapacityUsedKg: used,
+      categoryQuantities: categories,
+    );
+  }
+
+  factory OverviewSummaryModel.empty() {
+    return OverviewSummaryModel(
+      totalOrders: 0,
+      totalQuantityKg: 0.0,
+      totalAmountCollected: 0.0,
+    );
+  }
+}
+
+class DailySummaryItemModel {
+  final String date;
+  final int totalOrders;
+  final double totalQuantityKg;
+  final double totalAmount;
+  final String? wasteType;
+
+  DailySummaryItemModel({
+    required this.date,
+    required this.totalOrders,
+    required this.totalQuantityKg,
+    required this.totalAmount,
+    this.wasteType,
+  });
+
+  factory DailySummaryItemModel.fromJson(Map<String, dynamic> json) {
+    return DailySummaryItemModel(
+      date: json['date']?.toString() ??
+          json['day']?.toString() ??
+          json['pickup_date']?.toString() ??
+          '',
+      totalOrders: json['total_orders'] is int
+          ? json['total_orders'] as int
+          : (json['orders'] is int
+              ? json['orders'] as int
+              : int.tryParse(json['total_orders']?.toString() ??
+                      json['orders']?.toString() ??
+                      json['count']?.toString() ??
+                      '') ??
+                  0),
+      totalQuantityKg: json['total_quantity_kg'] != null
+          ? (double.tryParse(json['total_quantity_kg'].toString()) ?? 0.0)
+          : (json['quantity_kg'] != null
+              ? (double.tryParse(json['quantity_kg'].toString()) ?? 0.0)
+              : (json['quantity'] != null
+                  ? (double.tryParse(json['quantity'].toString()) ?? 0.0)
+                  : 0.0)),
+      totalAmount: json['total_amount_collected'] != null
+          ? (double.tryParse(json['total_amount_collected'].toString()) ?? 0.0)
+          : (json['total_amount'] != null
+              ? (double.tryParse(json['total_amount'].toString()) ?? 0.0)
+              : (json['amount'] != null
+                  ? (double.tryParse(json['amount'].toString()) ?? 0.0)
+                  : 0.0)),
+      wasteType: json['waste_type']?.toString() ??
+          json['category']?.toString() ??
+          json['items_description']?.toString(),
+    );
+  }
 }

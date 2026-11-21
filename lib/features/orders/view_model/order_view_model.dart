@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:suchigo_collector/features/auth/view_model/auth_view_model.dart';
 import 'package:suchigo_collector/models/collector_model.dart';
 import 'package:suchigo_collector/services/api_client.dart';
 
@@ -13,6 +14,31 @@ class OrderViewModel extends ChangeNotifier {
   final Map<int, String> _customStatuses = {};
   final Set<int> _updatingIds = {};
   bool _isReaching = false;
+
+  OrderViewModel() {
+    AuthViewModel.addOnLogoutCallback(_handleLogoutCallback);
+  }
+
+  @override
+  void dispose() {
+    AuthViewModel.removeOnLogoutCallback(_handleLogoutCallback);
+    super.dispose();
+  }
+
+  Future<void> _handleLogoutCallback() async {
+    reset();
+  }
+
+  void reset() {
+    _orders = [];
+    _isLoading = true;
+    _searchQuery = "";
+    _wardFilter = null;
+    _customStatuses.clear();
+    _updatingIds.clear();
+    _isReaching = false;
+    notifyListeners();
+  }
 
   List<LocationPickupModel> get orders => _orders;
   bool get isLoading => _isLoading;
@@ -88,12 +114,12 @@ class OrderViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> fetchActiveOrders() async {
+  Future<void> fetchActiveOrders({String? ward}) async {
     _isLoading = true;
     notifyListeners();
 
     try {
-      final data = await _apiClient.getLocations();
+      final data = await _apiClient.getLocations(ward: ward);
       _orders = data;
       _isLoading = false;
       notifyListeners();

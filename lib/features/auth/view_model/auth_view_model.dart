@@ -99,7 +99,20 @@ class AuthViewModel extends ChangeNotifier {
       return true;
     } catch (e) {
       _isLoading = false;
-      _errorMessage = e.toString().replaceAll('Exception: ', '');
+      final rawError = e.toString().replaceAll('Exception: ', '').trim();
+      final isAdmin = role == 'admin' ||
+          _loginSelectedRole == UserRole.adminPortal ||
+          username.trim().toLowerCase() == 'admin';
+
+      if (rawError.toLowerCase().contains('account is deleted') ||
+          (isAdmin &&
+              (rawError.toLowerCase().contains('invalid credentials') ||
+                  rawError.toLowerCase().contains('400') ||
+                  rawError.toLowerCase().contains('delete')))) {
+        _errorMessage = 'Account is deleted';
+      } else {
+        _errorMessage = rawError;
+      }
       notifyListeners();
       return false;
     }
@@ -134,6 +147,18 @@ class AuthViewModel extends ChangeNotifier {
     }
   }
 
+  static final List<Future<void> Function()> _onLogoutCallbacks = [];
+
+  static void addOnLogoutCallback(Future<void> Function() callback) {
+    if (!_onLogoutCallbacks.contains(callback)) {
+      _onLogoutCallbacks.add(callback);
+    }
+  }
+
+  static void removeOnLogoutCallback(Future<void> Function() callback) {
+    _onLogoutCallbacks.remove(callback);
+  }
+
   Future<void> logout() async {
     _isLoading = false;
     _errorMessage = null;
@@ -141,6 +166,15 @@ class AuthViewModel extends ChangeNotifier {
     _authResponse = null;
     _vehicle = null;
     _bagStatus = null;
+
+    for (final cb in List.of(_onLogoutCallbacks)) {
+      try {
+        await cb();
+      } catch (e) {
+        debugPrint('[AuthViewModel] Error in onLogoutCallback: $e');
+      }
+    }
+
     notifyListeners();
   }
 }

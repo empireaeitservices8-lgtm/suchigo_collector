@@ -68,7 +68,7 @@ class _AssignBagsDialogState extends State<AssignBagsDialog> {
 
     if (mounted) {
       setState(() => _isSaving = false);
-      if (res != null) {
+      if (res != null && res['success'] != false) {
         final message =
             res['message']?.toString() ?? "Bags assigned successfully";
         Fluttertoast.showToast(
@@ -80,8 +80,10 @@ class _AssignBagsDialogState extends State<AssignBagsDialog> {
         widget.onBagsAssigned?.call();
         Navigator.pop(context, true);
       } else {
+        final errorMsg = res?['error']?.toString() ??
+            "Failed to assign bags. Please try again.";
         Fluttertoast.showToast(
-          msg: "Failed to assign bags. Please try again.",
+          msg: errorMsg,
           toastLength: Toast.LENGTH_SHORT,
           backgroundColor: Colors.redAccent,
           textColor: Colors.white,

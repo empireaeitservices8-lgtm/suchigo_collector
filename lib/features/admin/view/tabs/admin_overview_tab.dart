@@ -60,7 +60,7 @@ class AdminOverviewTab extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  "Active Nodes",
+                                  "Active Collectors",
                                   style: TextStyle(
                                     fontSize: 12.5.spMin,
                                     color: const Color(0xFF757575),
@@ -178,7 +178,7 @@ class AdminOverviewTab extends StatelessWidget {
                                 ),
                                 SizedBox(height: 2.spMin),
                                 Text(
-                                  "₹${adminVm.totalRevenue.toInt()}",
+                                  adminVm.formatCurrency(adminVm.totalRevenue),
                                   style: TextStyle(
                                     fontSize: 18.spMin,
                                     color: SuchigoColors.textDark,
@@ -208,7 +208,7 @@ class AdminOverviewTab extends StatelessWidget {
                               ),
                               SizedBox(width: 6.spMin),
                               Text(
-                                "Cash: ₹${adminVm.cashRevenue.toInt()}",
+                                "Cash: ${adminVm.formatCurrency(adminVm.cashRevenue)}",
                                 style: TextStyle(
                                   fontSize: 13.spMin,
                                   fontWeight: FontWeight.w700,
@@ -227,7 +227,7 @@ class AdminOverviewTab extends StatelessWidget {
                               ),
                               SizedBox(width: 6.spMin),
                               Text(
-                                "Online: ₹${adminVm.onlineRevenue.toInt()}",
+                                "Online: ${adminVm.formatCurrency(adminVm.onlineRevenue)}",
                                 style: TextStyle(
                                   fontSize: 13.spMin,
                                   fontWeight: FontWeight.w700,
@@ -357,7 +357,7 @@ class AdminOverviewTab extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      "Cash 50% • Online 50%",
+                      "Cash ${adminVm.cashPercentage.toStringAsFixed(0)}% • Online ${adminVm.onlinePercentage.toStringAsFixed(0)}%",
                       style: TextStyle(
                         fontSize: 12.5.spMin,
                         fontWeight: FontWeight.w600,
@@ -369,7 +369,7 @@ class AdminOverviewTab extends StatelessWidget {
 
                 SizedBox(height: 8.spMin),
 
-                // Two-tone Progress Bar (50% light green, 50% dark green)
+                // Two-tone Progress Bar (Cash light green, Online dark green)
                 Container(
                   height: 8.spMin,
                   width: double.infinity,
@@ -380,11 +380,13 @@ class AdminOverviewTab extends StatelessWidget {
                   child: Row(
                     children: [
                       Expanded(
+                        flex: (adminVm.cashPercentage * 10).round().clamp(1, 1000),
                         child: Container(
                           color: const Color(0xFF81C784),
                         ),
                       ),
                       Expanded(
+                        flex: (adminVm.onlinePercentage * 10).round().clamp(1, 1000),
                         child: Container(
                           color: const Color(0xFF1D723C),
                         ),

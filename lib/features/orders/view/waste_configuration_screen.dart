@@ -1,13 +1,17 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:provider/provider.dart';
 import 'package:suchigo_collector/features/home/view/home_screen.dart';
 import 'package:suchigo_collector/features/home/view_model/home_view_model.dart';
+import 'package:suchigo_collector/features/orders/view_model/order_view_model.dart';
 import 'package:suchigo_collector/features/orders/view_model/waste_configuration_view_model.dart';
 import 'package:suchigo_collector/models/collector_model.dart';
+import 'package:suchigo_collector/services/notification_service.dart';
 
 class WasteConfigurationScreen extends StatefulWidget {
   static const routeName = '/WasteConfigurationScreen';
@@ -26,10 +30,14 @@ class WasteConfigurationScreen extends StatefulWidget {
 
 class _WasteConfigurationScreenState extends State<WasteConfigurationScreen> {
   final TextEditingController _weightController = TextEditingController();
+  StreamSubscription<RemoteMessage>? _notificationSubscription;
+  bool _isPaymentSheetOpen = false;
+  BuildContext? _paymentSheetContext;
 
   @override
   void initState() {
     super.initState();
+    _setupNotificationListener();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         final homeVm = context.read<HomeViewModel>();
@@ -42,8 +50,95 @@ class _WasteConfigurationScreenState extends State<WasteConfigurationScreen> {
     });
   }
 
+  void _closePaymentSheet() {
+    if (_isPaymentSheetOpen) {
+      _isPaymentSheetOpen = false;
+      try {
+        if (_paymentSheetContext != null &&
+            Navigator.canPop(_paymentSheetContext!)) {
+          Navigator.pop(_paymentSheetContext!);
+        } else if (mounted && Navigator.canPop(context)) {
+          Navigator.pop(context);
+        }
+      } catch (e) {
+        debugPrint('[WasteConfig] Error closing payment sheet: $e');
+      }
+      _paymentSheetContext = null;
+    }
+  }
+
+  void _setupNotificationListener() {
+    _notificationSubscription =
+        NotificationService().messageStream.listen((message) {
+      final isPayment = NotificationService().isPaymentNotification(message);
+      final effectivePickupId =
+          (widget.order.pickupId ?? widget.order.id).toString();
+      final data = message.data;
+      final orderId =
+          (data['order_id'] ?? data['pickup_id'] ?? data['location_id'] ?? '')
+              .toString();
+
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      print('💳 [WasteConfig Payment Page] Notification Received in UI!');
+      print('   🆔 Order ID (Screen): $effectivePickupId');
+      print('   🆔 Order ID (Notification): $orderId');
+      print('   💳 Is Payment Notification: $isPayment');
+      print('   👤 Order User Name (Screen): ${widget.order.name}');
+      print('   👤 User Name (Notification): ${data['user_name']}');
+      print('   💰 Amount (Notification): ${data['amount']}');
+      print('   🧾 Bill ID: ${data['bill_id']}');
+      print('   📝 Title: ${message.notification?.title}');
+      print('   📄 Body: ${message.notification?.body}');
+      print('   📦 Full Data Payload: $data');
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+      if (isPayment) {
+        final billId = (data['bill_id'] ?? '').toString();
+        final notifUserName =
+            (data['user_name'] ?? '').toString().trim().toLowerCase();
+        final currentUserName = widget.order.name.trim().toLowerCase();
+        final matchesUser = notifUserName.isNotEmpty &&
+            (currentUserName.contains(notifUserName) ||
+                notifUserName.contains(currentUserName));
+
+        // Matches if order ID matches, or user_name matches, or bill_id matches, or orderId is empty
+        if (orderId.isEmpty ||
+            orderId == effectivePickupId ||
+            orderId == widget.order.id.toString() ||
+            matchesUser ||
+            billId.isNotEmpty) {
+          print(
+            '✅ [WasteConfig] MATCHED order $effectivePickupId! Payment success confirmed!',
+          );
+
+          if (mounted) {
+            final double? parsedAmount =
+                double.tryParse(data['amount']?.toString() ?? '');
+
+            // 1. Mark payment success in ViewModel (closes QR code, makes 'Verify Payment' visible)
+            context.read<WasteConfigurationViewModel>().markPaymentSuccess(
+                  amount: parsedAmount,
+                  userName: notifUserName.isNotEmpty
+                      ? notifUserName
+                      : widget.order.name,
+                );
+
+            Fluttertoast.showToast(
+              msg: "Payment received! Tap 'Verify Payment' to complete.",
+              toastLength: Toast.LENGTH_LONG,
+              gravity: ToastGravity.BOTTOM,
+              backgroundColor: const Color(0xFF1D723C),
+              textColor: Colors.white,
+            );
+          }
+        }
+      }
+    });
+  }
+
   @override
   void dispose() {
+    _notificationSubscription?.cancel();
     _weightController.dispose();
     super.dispose();
   }
@@ -58,7 +153,8 @@ class _WasteConfigurationScreenState extends State<WasteConfigurationScreen> {
       ),
       builder: (context) {
         return Padding(
-          padding: EdgeInsets.symmetric(horizontal: 20.spMin, vertical: 24.spMin),
+          padding:
+              EdgeInsets.symmetric(horizontal: 20.spMin, vertical: 24.spMin),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -195,6 +291,7 @@ class _WasteConfigurationScreenState extends State<WasteConfigurationScreen> {
     final effectivePickupId = widget.order.pickupId ?? widget.order.id;
     context.read<WasteConfigurationViewModel>().fetchQrCode(effectivePickupId);
 
+    _isPaymentSheetOpen = true;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -203,6 +300,7 @@ class _WasteConfigurationScreenState extends State<WasteConfigurationScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24.spMin)),
       ),
       builder: (ctx) {
+        _paymentSheetContext = ctx;
         return Consumer<WasteConfigurationViewModel>(
           builder: (context, wasteVm, _) {
             final qrBytes = _decodeBase64Qr(wasteVm.qrCodeBase64);
@@ -295,103 +393,199 @@ class _WasteConfigurationScreenState extends State<WasteConfigurationScreen> {
 
                   SizedBox(height: 20.spMin),
 
-                  // QR Code Card or Cash Info Card
+                  // QR Code Card or Payment Success Card or Cash Info Card
                   if (wasteVm.paymentMode == 'online')
-                    Center(
-                      child: Column(
-                        children: [
-                          Container(
-                            width: 240.spMin,
-                            height: 240.spMin,
-                            padding: EdgeInsets.all(16.spMin),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(20.spMin),
-                              border: Border.all(
-                                color: const Color(0xFFE8F5E9),
-                                width: 1.5.spMin,
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.04),
-                                  blurRadius: 12.spMin,
-                                  offset: Offset(0, 4.spMin),
-                                ),
-                              ],
+                    if (wasteVm.isPaymentSuccess)
+                      Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 20.spMin,
+                          vertical: 24.spMin,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF7FCF7),
+                          borderRadius: BorderRadius.circular(20.spMin),
+                          border: Border.all(
+                            color: const Color(0xFF81C784),
+                            width: 1.5.spMin,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF1D723C)
+                                  .withValues(alpha: 0.08),
+                              blurRadius: 16.spMin,
+                              offset: Offset(0, 4.spMin),
                             ),
-                            child: Center(
-                              child: wasteVm.isLoadingQr
-                                  ? Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        const CircularProgressIndicator(
-                                          color: Color(0xFF1D723C),
-                                        ),
-                                        SizedBox(height: 12.spMin),
-                                        Text(
-                                          "Generating QR...",
-                                          style: TextStyle(
-                                            fontSize: 12.spMin,
-                                            color: const Color(0xFF757575),
-                                            fontWeight: FontWeight.w600,
+                          ],
+                        ),
+                        child: Column(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(14.spMin),
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFE8F5E9),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                Icons.check_circle_rounded,
+                                color: const Color(0xFF1D723C),
+                                size: 52.spMin,
+                              ),
+                            ),
+                            SizedBox(height: 14.spMin),
+                            Text(
+                              "Payment Successful!",
+                              style: TextStyle(
+                                fontSize: 19.spMin,
+                                fontWeight: FontWeight.w800,
+                                color: const Color(0xFF135C30),
+                                letterSpacing: -0.2.spMin,
+                              ),
+                            ),
+                            SizedBox(height: 6.spMin),
+                            Text(
+                              "₹${(wasteVm.receivedPaymentAmount ?? wasteVm.finalTotal).toStringAsFixed(2)} Received",
+                              style: TextStyle(
+                                fontSize: 16.5.spMin,
+                                fontWeight: FontWeight.w800,
+                                color: const Color(0xFF1A1A1A),
+                              ),
+                            ),
+                            if (wasteVm.receivedPaymentUserName != null &&
+                                wasteVm
+                                    .receivedPaymentUserName!.isNotEmpty) ...[
+                              SizedBox(height: 4.spMin),
+                              Text(
+                                "Paid by ${wasteVm.receivedPaymentUserName}",
+                                style: TextStyle(
+                                  fontSize: 13.spMin,
+                                  fontWeight: FontWeight.w600,
+                                  color: const Color(0xFF757575),
+                                ),
+                              ),
+                            ],
+                            SizedBox(height: 12.spMin),
+                            Container(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: 12.spMin,
+                                vertical: 6.spMin,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFE8F5E9),
+                                borderRadius: BorderRadius.circular(20.spMin),
+                              ),
+                              child: Text(
+                                "QR Code Closed • Ready to Verify",
+                                style: TextStyle(
+                                  fontSize: 11.5.spMin,
+                                  fontWeight: FontWeight.w700,
+                                  color: const Color(0xFF1D723C),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    else
+                      Center(
+                        child: Column(
+                          children: [
+                            Container(
+                              width: 240.spMin,
+                              height: 240.spMin,
+                              padding: EdgeInsets.all(16.spMin),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(20.spMin),
+                                border: Border.all(
+                                  color: const Color(0xFFE8F5E9),
+                                  width: 1.5.spMin,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.04),
+                                    blurRadius: 12.spMin,
+                                    offset: Offset(0, 4.spMin),
+                                  ),
+                                ],
+                              ),
+                              child: Center(
+                                child: wasteVm.isLoadingQr
+                                    ? Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const CircularProgressIndicator(
+                                            color: Color(0xFF1D723C),
                                           ),
-                                        ),
-                                      ],
-                                    )
-                                  : (qrBytes != null
-                                      ? Image.memory(
-                                          qrBytes,
-                                          width: 200.spMin,
-                                          height: 200.spMin,
-                                          fit: BoxFit.contain,
-                                        )
-                                      : (wasteVm.qrCodeUrl != null &&
-                                              wasteVm.qrCodeUrl!.isNotEmpty
-                                          ? Image.network(
-                                              wasteVm.qrCodeUrl!,
-                                              width: 200.spMin,
-                                              height: 200.spMin,
-                                              fit: BoxFit.contain,
-                                              errorBuilder: (_, __, ___) => Icon(
-                                                Icons.qr_code_2_rounded,
-                                                size: 130.spMin,
-                                                color: const Color(0xFF1D723C),
-                                              ),
-                                            )
-                                          : Column(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Icon(
+                                          SizedBox(height: 12.spMin),
+                                          Text(
+                                            "Generating QR...",
+                                            style: TextStyle(
+                                              fontSize: 12.spMin,
+                                              color: const Color(0xFF757575),
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ],
+                                      )
+                                    : (qrBytes != null
+                                        ? Image.memory(
+                                            qrBytes,
+                                            width: 200.spMin,
+                                            height: 200.spMin,
+                                            fit: BoxFit.contain,
+                                          )
+                                        : (wasteVm.qrCodeUrl != null &&
+                                                wasteVm.qrCodeUrl!.isNotEmpty
+                                            ? Image.network(
+                                                wasteVm.qrCodeUrl!,
+                                                width: 200.spMin,
+                                                height: 200.spMin,
+                                                fit: BoxFit.contain,
+                                                errorBuilder: (_, __, ___) =>
+                                                    Icon(
                                                   Icons.qr_code_2_rounded,
                                                   size: 130.spMin,
-                                                  color: const Color(0xFF1D723C),
+                                                  color:
+                                                      const Color(0xFF1D723C),
                                                 ),
-                                                Text(
-                                                  "₹${wasteVm.finalTotal.toStringAsFixed(2)}",
-                                                  style: TextStyle(
-                                                    fontSize: 14.spMin,
-                                                    fontWeight: FontWeight.w800,
+                                              )
+                                            : Column(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(
+                                                    Icons.qr_code_2_rounded,
+                                                    size: 130.spMin,
                                                     color:
-                                                        const Color(0xFF135C30),
+                                                        const Color(0xFF1D723C),
                                                   ),
-                                                ),
-                                              ],
-                                            ))),
+                                                  Text(
+                                                    "₹${wasteVm.finalTotal.toStringAsFixed(2)}",
+                                                    style: TextStyle(
+                                                      fontSize: 14.spMin,
+                                                      fontWeight:
+                                                          FontWeight.w800,
+                                                      color: const Color(
+                                                          0xFF135C30),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ))),
+                              ),
                             ),
-                          ),
-                          SizedBox(height: 14.spMin),
-                          Text(
-                            "SCAN QR CODE TO PAY INSTANTLY",
-                            style: TextStyle(
-                              fontSize: 12.spMin,
-                              fontWeight: FontWeight.w800,
-                              color: const Color(0xFF1D723C),
-                              letterSpacing: 0.6.spMin,
+                            SizedBox(height: 14.spMin),
+                            Text(
+                              "SCAN QR CODE TO PAY INSTANTLY",
+                              style: TextStyle(
+                                fontSize: 12.spMin,
+                                fontWeight: FontWeight.w800,
+                                color: const Color(0xFF1D723C),
+                                letterSpacing: 0.6.spMin,
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                    )
+                          ],
+                        ),
+                      )
                   else
                     Container(
                       width: double.infinity,
@@ -484,55 +678,102 @@ class _WasteConfigurationScreenState extends State<WasteConfigurationScreen> {
                       Expanded(
                         child: SizedBox(
                           height: 48.spMin,
-                          child: ElevatedButton(
-                            onPressed: wasteVm.isProcessingPayment
-                                ? null
-                                : () async {
-                                    final effectivePickupId =
-                                        widget.order.pickupId ??
-                                            widget.order.id;
+                          child: Builder(
+                            builder: (context) {
+                              final isVerifyEnabled =
+                                  !wasteVm.isProcessingPayment &&
+                                      (wasteVm.paymentMode == 'cash' ||
+                                          wasteVm.isPaymentSuccess);
 
-                                    final success = await wasteVm.processPayment(
-                                      pickupId: effectivePickupId,
-                                      locationId: widget.order.id,
-                                      localBody: widget.order.localBody ??
-                                          widget.order.ward,
-                                      ward: widget.order.ward,
-                                      userName: widget.order.name,
-                                    );
+                              return ElevatedButton(
+                                onPressed: isVerifyEnabled
+                                    ? () async {
+                                        final effectivePickupId =
+                                            widget.order.pickupId ??
+                                                widget.order.id;
 
-                                    if (!context.mounted) return;
-                                    Navigator.pop(context); // Close sheet
+                                        final success =
+                                            await wasteVm.processPayment(
+                                          pickupId: effectivePickupId,
+                                          locationId: widget.order.id,
+                                          localBody: widget.order.localBody ??
+                                              widget.order.ward,
+                                          ward: widget.order.ward,
+                                          userName: widget.order.name,
+                                        );
 
-                                    if (success) {
-                                      _showSuccessDialog(wasteVm.finalTotal);
-                                    }
-                                  },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF1D723C),
-                              foregroundColor: Colors.white,
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12.spMin),
-                              ),
-                            ),
-                            child: wasteVm.isProcessingPayment
-                                ? SizedBox(
-                                    width: 20.spMin,
-                                    height: 20.spMin,
-                                    child: const CircularProgressIndicator(
-                                      strokeWidth: 2.5,
-                                      color: Colors.white,
-                                    ),
-                                  )
-                                : Text(
-                                    "Verify Payment",
-                                    style: TextStyle(
-                                      fontSize: 14.5.spMin,
-                                      fontWeight: FontWeight.w800,
-                                      color: Colors.white,
-                                    ),
+                                        if (!context.mounted) return;
+                                        _closePaymentSheet();
+
+                                        if (success) {
+                                          context
+                                              .read<OrderViewModel>()
+                                              .updatePickupStatus(
+                                                pickupId: effectivePickupId,
+                                                locationId: widget.order.id,
+                                                status: 'completed',
+                                              );
+                                          Future.delayed(
+                                            const Duration(milliseconds: 200),
+                                            () {
+                                              if (mounted) {
+                                                _showSuccessDialog(wasteVm
+                                                        .receivedPaymentAmount ??
+                                                    wasteVm.finalTotal);
+                                              }
+                                            },
+                                          );
+                                        }
+                                      }
+                                    : null,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF1D723C),
+                                  foregroundColor: Colors.white,
+                                  disabledBackgroundColor:
+                                      const Color(0xFFE0E0E0),
+                                  disabledForegroundColor:
+                                      const Color(0xFF9E9E9E),
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius:
+                                        BorderRadius.circular(12.spMin),
                                   ),
+                                ),
+                                child: wasteVm.isProcessingPayment
+                                    ? SizedBox(
+                                        width: 20.spMin,
+                                        height: 20.spMin,
+                                        child: const CircularProgressIndicator(
+                                          strokeWidth: 2.5,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                    : Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          if (isVerifyEnabled) ...[
+                                            Icon(
+                                              Icons.check_circle_rounded,
+                                              size: 18.spMin,
+                                              color: Colors.white,
+                                            ),
+                                            SizedBox(width: 6.spMin),
+                                          ],
+                                          Text(
+                                            "Verify Payment",
+                                            style: TextStyle(
+                                              fontSize: 14.5.spMin,
+                                              fontWeight: FontWeight.w800,
+                                              color: isVerifyEnabled
+                                                  ? Colors.white
+                                                  : const Color(0xFF9E9E9E),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                              );
+                            },
                           ),
                         ),
                       ),
@@ -544,7 +785,10 @@ class _WasteConfigurationScreenState extends State<WasteConfigurationScreen> {
           },
         );
       },
-    );
+    ).whenComplete(() {
+      _isPaymentSheetOpen = false;
+      _paymentSheetContext = null;
+    });
   }
 
   void _showSuccessDialog([double? totalAmount]) {
@@ -622,12 +866,25 @@ class _WasteConfigurationScreenState extends State<WasteConfigurationScreen> {
 
   Future<void> _handleProceedToPayment() async {
     final wasteVm = context.read<WasteConfigurationViewModel>();
-    if (wasteVm.enteredWeight <= 0 && wasteVm.bagQuantities.isEmpty) {
+
+    if (wasteVm.bagQuantities.isEmpty || wasteVm.totalBags <= 0) {
       Fluttertoast.showToast(
-        msg: "Please enter weight or add bag size to continue",
+        msg: "Please add at least one bag size.",
         toastLength: Toast.LENGTH_SHORT,
         gravity: ToastGravity.BOTTOM,
-        backgroundColor: Colors.black87,
+        backgroundColor: const Color(0xFFE53935),
+        textColor: Colors.white,
+      );
+      return;
+    }
+
+    if (wasteVm.enteredWeight <= 0) {
+      Fluttertoast.showToast(
+        msg: "Please enter waste weight in kg.",
+        toastLength: Toast.LENGTH_SHORT,
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: const Color(0xFFE53935),
+        textColor: Colors.white,
       );
       return;
     }
@@ -825,6 +1082,10 @@ class _WasteConfigurationScreenState extends State<WasteConfigurationScreen> {
                             decoration: BoxDecoration(
                               color: Colors.white,
                               borderRadius: BorderRadius.circular(20.spMin),
+                              border: Border.all(
+                                color: const Color(0xFFC8E6C9),
+                                width: 1.2.spMin,
+                              ),
                               boxShadow: [
                                 BoxShadow(
                                   color: Colors.black.withValues(alpha: 0.03),
@@ -881,25 +1142,6 @@ class _WasteConfigurationScreenState extends State<WasteConfigurationScreen> {
                             children: [
                               Row(
                                 children: [
-                                  Container(
-                                    padding: EdgeInsets.symmetric(
-                                      horizontal: 6.spMin,
-                                      vertical: 2.spMin,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFE8F5E9),
-                                      borderRadius:
-                                          BorderRadius.circular(6.spMin),
-                                    ),
-                                    child: Text(
-                                      "123",
-                                      style: TextStyle(
-                                        fontSize: 11.spMin,
-                                        fontWeight: FontWeight.w800,
-                                        color: const Color(0xFF1D723C),
-                                      ),
-                                    ),
-                                  ),
                                   SizedBox(width: 10.spMin),
                                   Text(
                                     "Adjust Quantities",
@@ -930,9 +1172,10 @@ class _WasteConfigurationScreenState extends State<WasteConfigurationScreen> {
                                 )
                               else
                                 ...wasteVm.bagQuantities.entries.map((entry) {
-                                  final displayName = entry.key.toUpperCase().contains('BAG')
-                                      ? entry.key
-                                      : "${entry.key} Bag";
+                                  final displayName =
+                                      entry.key.toUpperCase().contains('BAG')
+                                          ? entry.key
+                                          : "${entry.key} Bag";
                                   return Padding(
                                     padding: EdgeInsets.only(bottom: 12.spMin),
                                     child: Row(
@@ -1103,7 +1346,8 @@ class _WasteConfigurationScreenState extends State<WasteConfigurationScreen> {
                                           color: isSelected
                                               ? const Color(0xFF1D723C)
                                               : const Color(0xFFE8F5E9),
-                                          width: isSelected ? 1.5.spMin : 1.spMin,
+                                          width:
+                                              isSelected ? 1.5.spMin : 1.spMin,
                                         ),
                                       ),
                                       child: Row(
@@ -1112,7 +1356,8 @@ class _WasteConfigurationScreenState extends State<WasteConfigurationScreen> {
                                             padding: EdgeInsets.all(6.spMin),
                                             decoration: BoxDecoration(
                                               color: isSelected
-                                                  ? Colors.white.withValues(alpha: 0.2)
+                                                  ? Colors.white
+                                                      .withValues(alpha: 0.2)
                                                   : const Color(0xFFE8F5E9),
                                               shape: BoxShape.circle,
                                             ),
@@ -1289,9 +1534,8 @@ class _WasteConfigurationScreenState extends State<WasteConfigurationScreen> {
                                     Expanded(
                                       child: TextField(
                                         controller: _weightController,
-                                        keyboardType:
-                                            const TextInputType.numberWithOptions(
-                                                decimal: true),
+                                        keyboardType: const TextInputType
+                                            .numberWithOptions(decimal: true),
                                         style: TextStyle(
                                           fontSize: 16.spMin,
                                           fontWeight: FontWeight.w800,
@@ -1299,7 +1543,8 @@ class _WasteConfigurationScreenState extends State<WasteConfigurationScreen> {
                                         ),
                                         onChanged: (val) {
                                           wasteVm.setWeight(
-                                              double.tryParse(val.trim()) ?? 0.0);
+                                              double.tryParse(val.trim()) ??
+                                                  0.0);
                                         },
                                         decoration: InputDecoration(
                                           filled: false,
@@ -1373,26 +1618,37 @@ class _WasteConfigurationScreenState extends State<WasteConfigurationScreen> {
                                 ),
                               ),
                               SizedBox(width: 14.spMin),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    "User Wallet Balance",
-                                    style: TextStyle(
-                                      fontSize: 14.spMin,
-                                      fontWeight: FontWeight.w700,
-                                      color: const Color(0xFF1A1A1A),
-                                    ),
-                                  ),
-                                  SizedBox(height: 2.spMin),
-                                  Text(
-                                    "₹${wasteVm.walletBalance.toStringAsFixed(2)} available",
-                                    style: TextStyle(
-                                      fontSize: 12.spMin,
-                                      color: const Color(0xFF757575),
-                                    ),
-                                  ),
-                                ],
+                              Builder(
+                                builder: (context) {
+                                  final effectiveWallet = wasteVm.walletBalance > 0
+                                      ? wasteVm.walletBalance
+                                      : (widget.order.walletBalance ?? 0.0);
+
+                                  return Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        "User Wallet Balance",
+                                        style: TextStyle(
+                                          fontSize: 14.spMin,
+                                          fontWeight: FontWeight.w700,
+                                          color: const Color(0xFF1A1A1A),
+                                        ),
+                                      ),
+                                      SizedBox(height: 2.spMin),
+                                      Text(
+                                        "₹${effectiveWallet.toStringAsFixed(2)} available",
+                                        style: TextStyle(
+                                          fontSize: 12.5.spMin,
+                                          fontWeight: FontWeight.w600,
+                                          color: effectiveWallet > 0
+                                              ? const Color(0xFF1D723C)
+                                              : const Color(0xFF757575),
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                },
                               ),
                               const Spacer(),
                               Text(
@@ -1407,6 +1663,16 @@ class _WasteConfigurationScreenState extends State<WasteConfigurationScreen> {
                               // Custom Animated Toggle Switch
                               GestureDetector(
                                 onTap: () {
+                                  final effectiveWallet = wasteVm.walletBalance > 0
+                                      ? wasteVm.walletBalance
+                                      : (widget.order.walletBalance ?? 0.0);
+                                  if (effectiveWallet <= 0) {
+                                    Fluttertoast.showToast(
+                                      msg: "No wallet balance available to redeem",
+                                      toastLength: Toast.LENGTH_SHORT,
+                                    );
+                                    return;
+                                  }
                                   wasteVm.toggleRedeemWallet();
                                 },
                                 child: AnimatedContainer(
@@ -1523,8 +1789,8 @@ class _WasteConfigurationScreenState extends State<WasteConfigurationScreen> {
                                   wasteVm.bagQuantities.isEmpty &&
                                   wasteVm.selectedWasteTypes.isEmpty)
                                 Padding(
-                                  padding: EdgeInsets.symmetric(
-                                      vertical: 12.spMin),
+                                  padding:
+                                      EdgeInsets.symmetric(vertical: 12.spMin),
                                   child: Center(
                                     child: Text(
                                       "No items selected yet",
@@ -1542,12 +1808,15 @@ class _WasteConfigurationScreenState extends State<WasteConfigurationScreen> {
                                       wasteVm.bagPrices[e.key.toUpperCase()] ??
                                       (e.key.toUpperCase().contains('MEDIUM')
                                           ? 7.0
-                                          : (e.key.toUpperCase().contains('SMALL')
+                                          : (e.key
+                                                  .toUpperCase()
+                                                  .contains('SMALL')
                                               ? 5.0
                                               : 10.0));
-                                  final displayName = e.key.toUpperCase().contains('BAG')
-                                      ? e.key
-                                      : "${e.key} Bag";
+                                  final displayName =
+                                      e.key.toUpperCase().contains('BAG')
+                                          ? e.key
+                                          : "${e.key} Bag";
                                   return Padding(
                                     padding: EdgeInsets.only(bottom: 10.spMin),
                                     child: Row(
@@ -1636,7 +1905,8 @@ class _WasteConfigurationScreenState extends State<WasteConfigurationScreen> {
                                       ],
                                     ),
                                   ),
-                                if (wasteVm.redeemWallet && wasteVm.discount > 0) ...[
+                                if (wasteVm.redeemWallet &&
+                                    wasteVm.discount > 0) ...[
                                   Divider(
                                     color: const Color(0xFFF5F5F5),
                                     thickness: 1.spMin,
@@ -1714,32 +1984,116 @@ class _WasteConfigurationScreenState extends State<WasteConfigurationScreen> {
 
                         SizedBox(height: 16.spMin),
 
-                        // 9. Proceed to Payment Button
+                        // Payment Success Alert Banner (when payment notification arrived)
+                        if (wasteVm.isPaymentSuccess)
+                          Container(
+                            width: double.infinity,
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 16.spMin,
+                              vertical: 12.spMin,
+                            ),
+                            margin: EdgeInsets.only(bottom: 12.spMin),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE8F5E9),
+                              borderRadius: BorderRadius.circular(14.spMin),
+                              border: Border.all(
+                                color: const Color(0xFF81C784),
+                                width: 1.2.spMin,
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.check_circle_rounded,
+                                  color: const Color(0xFF1D723C),
+                                  size: 24.spMin,
+                                ),
+                                SizedBox(width: 10.spMin),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        "Payment Received: ₹${(wasteVm.receivedPaymentAmount ?? wasteVm.finalTotal).toStringAsFixed(2)}",
+                                        style: TextStyle(
+                                          fontSize: 14.spMin,
+                                          fontWeight: FontWeight.w800,
+                                          color: const Color(0xFF135C30),
+                                        ),
+                                      ),
+                                      Text(
+                                        "Tap 'Verify Payment' below to finalize order",
+                                        style: TextStyle(
+                                          fontSize: 12.spMin,
+                                          fontWeight: FontWeight.w600,
+                                          color: const Color(0xFF616161),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                        // 9. Proceed to Payment / Verify Payment Button
                         SizedBox(
                           width: double.infinity,
                           height: 50.spMin,
                           child: ElevatedButton(
-                            onPressed: _handleProceedToPayment,
+                            onPressed: wasteVm.isPaymentSuccess
+                                ? () async {
+                                    final effectivePickupId =
+                                        widget.order.pickupId ??
+                                            widget.order.id;
+                                    final success =
+                                        await wasteVm.processPayment(
+                                      pickupId: effectivePickupId,
+                                      locationId: widget.order.id,
+                                      localBody: widget.order.localBody ??
+                                          widget.order.ward,
+                                      ward: widget.order.ward,
+                                      userName: widget.order.name,
+                                    );
+                                    if (!context.mounted) return;
+                                    if (success) {
+                                      context
+                                          .read<OrderViewModel>()
+                                          .updatePickupStatus(
+                                            pickupId: effectivePickupId,
+                                            locationId: widget.order.id,
+                                            status: 'completed',
+                                          );
+                                      _showSuccessDialog(
+                                          wasteVm.receivedPaymentAmount ??
+                                              wasteVm.finalTotal);
+                                    }
+                                  }
+                                : _handleProceedToPayment,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFF1D723C),
                               foregroundColor: Colors.white,
                               elevation: 0,
                               shape: RoundedRectangleBorder(
-                                borderRadius:
-                                    BorderRadius.circular(14.spMin),
+                                borderRadius: BorderRadius.circular(14.spMin),
                               ),
                             ),
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Icon(
-                                  Icons.credit_card_rounded,
+                                  wasteVm.isPaymentSuccess
+                                      ? Icons.check_circle_rounded
+                                      : Icons.credit_card_rounded,
                                   color: Colors.white,
                                   size: 20.spMin,
                                 ),
                                 SizedBox(width: 8.spMin),
                                 Text(
-                                  "Proceed to Payment",
+                                  wasteVm.isPaymentSuccess
+                                      ? "Verify Payment"
+                                      : "Proceed to Payment",
                                   style: TextStyle(
                                     fontSize: 15.spMin,
                                     fontWeight: FontWeight.w800,

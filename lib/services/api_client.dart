@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:suchigo_collector/config/app_config.dart';
+import 'package:suchigo_collector/features/auth/view/login_screen.dart';
 import 'package:suchigo_collector/helpers/sp_helper.dart';
 import 'package:suchigo_collector/models/collector_model.dart';
 import 'package:suchigo_collector/services/notification_service.dart';
@@ -35,14 +37,42 @@ class ApiClient {
       ),
     );
 
-    // 1. Auth Header injector
+    // 1. Auth Header injector & Admin 400 error handler
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
           if (_authToken != null && _authToken!.isNotEmpty) {
             options.headers['Authorization'] = 'Bearer $_authToken';
           }
+          final fcm = NotificationService().fcmToken;
+          if (fcm != null && fcm.isNotEmpty) {
+            options.headers['X-FCM-Token'] = fcm;
+          }
           return handler.next(options);
+        },
+        onError: (DioException error, ErrorInterceptorHandler handler) async {
+          final is400 = error.response?.statusCode == 400;
+          final isAdminPath = error.requestOptions.path.contains('admin/');
+          final isAdminUser = _userRole == 'admin';
+
+          if (is400 &&
+              (isAdminPath || isAdminUser) &&
+              !error.requestOptions.path.contains('login')) {
+            debugPrint(
+                '[ApiClient] Admin 400 error detected: redirecting to login with Account is deleted');
+            await clearSession();
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              final navState = AppConfig.navKey.currentState;
+              if (navState != null) {
+                navState.pushNamedAndRemoveUntil(
+                  LoginScreen.routeName,
+                  (route) => false,
+                  arguments: {'accountDeleted': true},
+                );
+              }
+            });
+          }
+          return handler.next(error);
         },
       ),
     );
@@ -103,12 +133,8 @@ class ApiClient {
     _userRole = null;
     _currentCollector = null;
     try {
-      final savedFcmToken = NotificationService().fcmToken ??
-          await SpHelper.getString('fcm_token');
       await SpHelper.clearAll();
-      if (savedFcmToken != null && savedFcmToken.isNotEmpty) {
-        await SpHelper.saveString('fcm_token', savedFcmToken);
-      }
+      await NotificationService().deleteToken();
     } catch (e) {
       debugPrint('[ApiClient] Error clearing session: $e');
     }
@@ -143,14 +169,18 @@ class ApiClient {
     }
 
     try {
-      final fcmToken = NotificationService().fcmToken ??
-          await NotificationService().getFcmToken() ??
-          await SpHelper.getString('fcm_token') ??
-          '';
+      // 1. Strictly generate a brand-new FCM token at login time (do not use any old one)
+      final fcmToken = await NotificationService().generateNewFcmToken();
+
+      print('====================================================');
+      print('🚀 [LOGIN API] Transmitting Fresh FCM Token to Backend:');
+      print('   $fcmToken');
+      print('====================================================');
+
       final payload = {
         'username': trimmedUser,
         'password': trimmedPass,
-        'fcm_token': fcmToken,
+        if (fcmToken != null && fcmToken.isNotEmpty) 'fcm_token': fcmToken,
         if (role != null) 'role': role,
       };
 
@@ -169,12 +199,36 @@ class ApiClient {
         throw Exception('Invalid response structure from login API');
       }
     } on DioException catch (e) {
-      final errorMsg = e.response?.data is Map &&
-              e.response?.data['message'] != null
-          ? e.response?.data['message'].toString()
-          : (e.response?.data is Map && e.response?.data['error'] != null
-              ? e.response?.data['error'].toString()
-              : e.message ?? 'Login failed. Please check your credentials.');
+      final statusCode = e.response?.statusCode;
+      final data = e.response?.data;
+
+      String serverError = '';
+      if (data is Map) {
+        serverError = data['error']?.toString() ??
+            data['message']?.toString() ??
+            data['detail']?.toString() ??
+            '';
+        if (serverError.isEmpty &&
+            data['non_field_errors'] is List &&
+            (data['non_field_errors'] as List).isNotEmpty) {
+          serverError = (data['non_field_errors'] as List).first.toString();
+        }
+      }
+
+      final isAdmin = role == 'admin' || trimmedUser.toLowerCase() == 'admin';
+
+      // Handle 400 error when account is deleted (e.g. backend returns {"error": "Invalid credentials"})
+      if (statusCode == 400) {
+        if (isAdmin ||
+            serverError.toLowerCase().contains('delete') ||
+            serverError.toLowerCase().contains('invalid credentials')) {
+          throw Exception('Account is deleted');
+        }
+      }
+
+      final errorMsg = serverError.isNotEmpty
+          ? serverError
+          : (e.message ?? 'Login failed. Please check your credentials.');
       throw Exception(errorMsg);
     }
   }
@@ -224,11 +278,22 @@ class ApiClient {
         queryParams['localbody_id'] = localBodyId;
       }
       final response = await _dio.get(
-        'wards/',
+        'collector/wards/',
         queryParameters: queryParams.isNotEmpty ? queryParams : null,
       );
+      List rawList = [];
       if (response.data is List) {
-        final allWards = (response.data as List)
+        rawList = response.data as List;
+      } else if (response.data is Map && response.data['data'] is List) {
+        rawList = response.data['data'] as List;
+      } else if (response.data is Map && response.data['results'] is List) {
+        rawList = response.data['results'] as List;
+      } else if (response.data is Map && response.data['wards'] is List) {
+        rawList = response.data['wards'] as List;
+      }
+
+      if (rawList.isNotEmpty) {
+        final allWards = rawList
             .map((item) => WardModel.fromJson(item as Map<String, dynamic>))
             .toList();
         if (localBodyId != null) {
@@ -248,9 +313,16 @@ class ApiClient {
   }
 
   /// GET locations/
-  Future<List<LocationPickupModel>> getLocations() async {
+  Future<List<LocationPickupModel>> getLocations({String? ward}) async {
     try {
-      final response = await _dio.get('locations/');
+      final queryParams = <String, dynamic>{};
+      if (ward != null && ward.trim().isNotEmpty) {
+        queryParams['ward'] = ward.trim();
+      }
+      final response = await _dio.get(
+        'locations/',
+        queryParameters: queryParams.isNotEmpty ? queryParams : null,
+      );
       if (response.data is List) {
         return (response.data as List)
             .map((item) =>
@@ -333,14 +405,65 @@ class ApiClient {
         'admin/collector-history/',
         queryParameters: {'collector_id': collectorId},
       );
-      if (response.data is Map<String, dynamic>) {
+      if (response.data is Map) {
         return AdminCollectorHistoryModel.fromJson(
-            response.data as Map<String, dynamic>);
+            Map<String, dynamic>.from(response.data as Map));
       }
       throw Exception('Invalid response structure for collector history');
     } catch (e) {
       debugPrint('[ApiClient] getAdminCollectorHistory error: $e');
       rethrow;
+    }
+  }
+
+  /// GET collector/overview/?collector_id=24
+  Future<CollectorOverviewModel?> getCollectorOverview({
+    int? collectorId,
+    String? fromDate,
+    String? toDate,
+  }) async {
+    try {
+      final effectiveId = collectorId ?? _currentCollector?.id ?? 24;
+      final queryParams = <String, dynamic>{
+        'collector_id': effectiveId,
+      };
+      if (fromDate != null && fromDate.isNotEmpty) {
+        queryParams['from_date'] = fromDate;
+      }
+      if (toDate != null && toDate.isNotEmpty) {
+        queryParams['to_date'] = toDate;
+      }
+
+      Response response;
+      try {
+        response = await _dio.get(
+          'collector/overview/',
+          queryParameters: queryParams,
+        );
+      } catch (e) {
+        // Fallback: If date parameters cause an error, retry with strictly collector_id only
+        if (queryParams.length > 1) {
+          response = await _dio.get(
+            'collector/overview/',
+            queryParameters: {'collector_id': effectiveId},
+          );
+        } else {
+          rethrow;
+        }
+      }
+
+      if (response.data is Map) {
+        final mapData = Map<String, dynamic>.from(response.data as Map);
+        final model = CollectorOverviewModel.fromJson(mapData);
+        if (model.collector != null && _currentCollector == null) {
+          _currentCollector = model.collector;
+        }
+        return model;
+      }
+      return null;
+    } catch (e) {
+      debugPrint('[ApiClient] getCollectorOverview error: $e');
+      return null;
     }
   }
 
@@ -402,7 +525,7 @@ class ApiClient {
       return [
         VehicleNumberItem(
           id: 1,
-          number: 'KL 07 AB 1234',
+          number: '',
           vehicleModelId: modelId ?? 1,
         )
       ];
@@ -487,12 +610,24 @@ class ApiClient {
   }) async {
     try {
       final payload = {
+        'collector_id': collectorId,
         'collector': collectorId,
         'bag_count': bagCount,
+        'count': bagCount,
       };
       final response = await _dio.post('admin/assign-bags/', data: payload);
       debugPrint('[ApiClient] assignBagsToCollector success: ${response.data}');
       return response.data;
+    } on DioException catch (e) {
+      debugPrint(
+          '[ApiClient] assignBagsToCollector DioException: ${e.response?.data ?? e.message}');
+      final errorMsg =
+          e.response?.data is Map && e.response?.data['error'] != null
+              ? e.response?.data['error'].toString()
+              : (e.response?.data is Map && e.response?.data['message'] != null
+                  ? e.response?.data['message'].toString()
+                  : e.message ?? 'Failed to assign bags');
+      throw Exception(errorMsg);
     } catch (e) {
       debugPrint('[ApiClient] assignBagsToCollector error: $e');
       rethrow;
@@ -663,18 +798,26 @@ class ApiClient {
     String? localBody,
     String? ward,
     String? userName,
+    int? collectorId,
+    String? status,
     Map<String, dynamic>? extraData,
   }) async {
     try {
+      final effectiveCollectorId = collectorId ?? currentCollector?.id;
+      final fcmToken = NotificationService().fcmToken;
       final payload = {
         'pickup_id': pickupId,
         'weight': weight,
         'rate': rate,
         'total_amount': totalAmount,
         'payment_method': paymentMethod,
+        if (status != null) 'status': status,
+        if (effectiveCollectorId != null) 'collector_id': effectiveCollectorId,
+        if (effectiveCollectorId != null) 'collector': effectiveCollectorId,
         if (localBody != null) 'local_body': localBody,
         if (ward != null) 'ward': ward,
         if (userName != null) 'user_name': userName,
+        if (fcmToken != null && fcmToken.isNotEmpty) 'fcm_token': fcmToken,
         if (extraData != null) ...extraData,
       };
       final response = await _dio.post('generate-bill/', data: payload);
@@ -690,15 +833,30 @@ class ApiClient {
   Future<dynamic> generateRazorpayQr({
     required double amount,
     int? pickupId,
+    dynamic billId,
+    int? collectorId,
     String? orderId,
   }) async {
     try {
+      final effectiveCollectorId = collectorId ?? currentCollector?.id;
+      final fcmToken = NotificationService().fcmToken;
+      final notesMap = {
+        if (pickupId != null) 'pickup_id': pickupId.toString(),
+        if (billId != null) 'bill_id': billId.toString(),
+        if (effectiveCollectorId != null)
+          'collector_id': effectiveCollectorId.toString(),
+      };
       final payload = {
         'amount': amount,
         'key_id': AppConfig.razorpayKeyId,
         'key_secret': AppConfig.razorpayKeySecret,
         if (pickupId != null) 'pickup_id': pickupId,
+        if (billId != null) 'bill_id': billId,
+        if (effectiveCollectorId != null) 'collector_id': effectiveCollectorId,
+        if (effectiveCollectorId != null) 'collector': effectiveCollectorId,
         if (orderId != null) 'order_id': orderId,
+        if (fcmToken != null && fcmToken.isNotEmpty) 'fcm_token': fcmToken,
+        'notes': notesMap,
       };
       final response = await _dio.post('razorpay/generate-qr/', data: payload);
       debugPrint('[ApiClient] generateRazorpayQr success: ${response.data}');
@@ -711,6 +869,13 @@ class ApiClient {
             'Basic ${base64Encode(utf8.encode('${AppConfig.razorpayKeyId}:${AppConfig.razorpayKeySecret}'))}';
         final rzpDio = Dio();
         final amountInPaise = (amount * 100).round();
+        final effectiveCollectorId = collectorId ?? currentCollector?.id;
+        final notesMap = {
+          if (pickupId != null) 'pickup_id': pickupId.toString(),
+          if (billId != null) 'bill_id': billId.toString(),
+          if (effectiveCollectorId != null)
+            'collector_id': effectiveCollectorId.toString(),
+        };
         final rzpResponse = await rzpDio.post(
           'https://api.razorpay.com/v1/payments/qr_codes',
           options: Options(
@@ -727,10 +892,7 @@ class ApiClient {
             'payment_amount': amountInPaise,
             'description':
                 'Waste Collection Payment ${pickupId != null ? "#$pickupId" : ""}',
-            if (pickupId != null)
-              'notes': {
-                'pickup_id': pickupId.toString(),
-              },
+            'notes': notesMap,
           },
         );
         if (rzpResponse.data is Map) {

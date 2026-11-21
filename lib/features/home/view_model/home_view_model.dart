@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:suchigo_collector/features/auth/view_model/auth_view_model.dart';
 import 'package:suchigo_collector/helpers/sp_helper.dart';
 import 'package:suchigo_collector/models/collector_model.dart';
 import 'package:suchigo_collector/services/api_client.dart';
@@ -18,6 +19,16 @@ class HomeViewModel extends ChangeNotifier {
   bool _isLoadingWards = false;
   bool _isSavingProfile = false;
   bool _isProfileRecentlySaved = false;
+
+  HomeViewModel() {
+    AuthViewModel.addOnLogoutCallback(clearSelections);
+  }
+
+  @override
+  void dispose() {
+    AuthViewModel.removeOnLogoutCallback(clearSelections);
+    super.dispose();
+  }
 
   List<DistrictModel> get districts => _districts;
   DistrictModel? get selectedDistrict => _selectedDistrict;
@@ -72,65 +83,11 @@ class HomeViewModel extends ChangeNotifier {
 
     try {
       final wards = await _apiClient.getWards(localBodyId);
-      if (wards.isNotEmpty) {
-        _wards = wards;
-      } else {
-        _wards = [
-          WardModel(
-            id: 1,
-            name: "Neericode West",
-            wardNumber: "1",
-            localbody: localBodyId,
-          ),
-          WardModel(
-            id: 2,
-            name: "Neericode East",
-            wardNumber: "2",
-            localbody: localBodyId,
-          ),
-          WardModel(
-            id: 3,
-            name: "Panchayat Head Quarters",
-            wardNumber: "3",
-            localbody: localBodyId,
-          ),
-          WardModel(
-            id: 4,
-            name: "Koduvazhanga South",
-            wardNumber: "4",
-            localbody: localBodyId,
-          ),
-          WardModel(
-            id: 5,
-            name: "Koduvazhanga North",
-            wardNumber: "5",
-            localbody: localBodyId,
-          ),
-        ];
-      }
+      _wards = wards;
       _isLoadingWards = false;
       notifyListeners();
     } catch (_) {
-      _wards = [
-        WardModel(
-          id: 1,
-          name: "Neericode West",
-          wardNumber: "1",
-          localbody: localBodyId,
-        ),
-        WardModel(
-          id: 2,
-          name: "Neericode East",
-          wardNumber: "2",
-          localbody: localBodyId,
-        ),
-        WardModel(
-          id: 3,
-          name: "Panchayat Head Quarters",
-          wardNumber: "3",
-          localbody: localBodyId,
-        ),
-      ];
+      _wards = [];
       _isLoadingWards = false;
       notifyListeners();
     }
@@ -202,5 +159,33 @@ class HomeViewModel extends ChangeNotifier {
       notifyListeners();
       return false;
     }
+  }
+
+  Future<void> clearSelections() async {
+    _selectedDistrict = null;
+    _selectedLocalBody = null;
+    _selectedWard = null;
+    _localBodies = [];
+    _wards = [];
+    _isLoadingLocalBodies = false;
+    _isLoadingWards = false;
+    _isSavingProfile = false;
+    _isProfileRecentlySaved = false;
+
+    try {
+      await SpHelper.remove('profile_saved_ward');
+      await SpHelper.remove('profile_saved_ward_number');
+      await SpHelper.remove('profile_saved_district');
+      await SpHelper.remove('profile_saved_localbody');
+      await SpHelper.remove('profile_saved_localbody_id');
+    } catch (_) {}
+
+    notifyListeners();
+  }
+
+  Future<void> reset() async {
+    await clearSelections();
+    _districts = [];
+    notifyListeners();
   }
 }

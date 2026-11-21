@@ -3,7 +3,11 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:provider/provider.dart';
 import 'package:suchigo_collector/features/admin/view/admin_console_screen.dart';
 import 'package:suchigo_collector/features/auth/view_model/auth_view_model.dart';
+import 'package:suchigo_collector/features/history/view_model/history_view_model.dart';
 import 'package:suchigo_collector/features/home/view/home_screen.dart';
+import 'package:suchigo_collector/features/home/view_model/home_view_model.dart';
+import 'package:suchigo_collector/features/orders/view_model/order_view_model.dart';
+import 'package:suchigo_collector/features/wards/view_model/ward_view_model.dart';
 import 'package:suchigo_collector/utils/suchigo_colors.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -18,6 +22,35 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  bool _accountDeletedShown = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<HomeViewModel>().clearSelections();
+        context.read<WardViewModel>().reset();
+        context.read<OrderViewModel>().reset();
+        context.read<HistoryViewModel>().reset();
+
+        final args = ModalRoute.of(context)?.settings.arguments;
+        if (args is Map &&
+            args['accountDeleted'] == true &&
+            !_accountDeletedShown) {
+          _accountDeletedShown = true;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Account is deleted Contact Admin"),
+              backgroundColor: Colors.redAccent,
+              behavior: SnackBarBehavior.floating,
+              duration: Duration(seconds: 4),
+            ),
+          );
+        }
+      }
+    });
+  }
 
   bool get _isFormValid =>
       _usernameController.text.trim().isNotEmpty &&
@@ -49,12 +82,20 @@ class _LoginScreenState extends State<LoginScreen> {
     final success = await authVm.login(
       username: username,
       password: password,
-      role: authVm.loginSelectedRole == UserRole.collector ? 'collector' : 'admin',
+      role: authVm.loginSelectedRole == UserRole.collector
+          ? 'collector'
+          : 'admin',
     );
 
     if (!mounted) return;
 
     if (success) {
+      await context.read<HomeViewModel>().clearSelections();
+      context.read<WardViewModel>().reset();
+      context.read<OrderViewModel>().reset();
+      context.read<HistoryViewModel>().reset();
+      context.read<HomeViewModel>().fetchDistricts();
+
       final name = authVm.collector?.name ?? username;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -63,17 +104,35 @@ class _LoginScreenState extends State<LoginScreen> {
           behavior: SnackBarBehavior.floating,
         ),
       );
-      if (authVm.loginSelectedRole == UserRole.adminPortal || authVm.isAdmin || username.toLowerCase() == 'admin') {
+      if (authVm.loginSelectedRole == UserRole.adminPortal ||
+          authVm.isAdmin ||
+          username.toLowerCase() == 'admin') {
         Navigator.pushReplacementNamed(context, AdminConsoleScreen.routeName);
       } else {
         Navigator.pushReplacementNamed(context, HomeScreen.routeName);
       }
     } else {
+      final isLoggingInAsAdmin =
+          authVm.loginSelectedRole == UserRole.adminPortal ||
+              username.trim().toLowerCase() == 'admin';
+
+      String errorMsg =
+          authVm.errorMessage ?? "Login failed. Please check credentials.";
+
+      if (isLoggingInAsAdmin &&
+          (errorMsg.toLowerCase().contains('invalid credentials') ||
+              errorMsg.toLowerCase().contains('400') ||
+              errorMsg.toLowerCase().contains('delete') ||
+              errorMsg == 'Account is deleted Contact Admin')) {
+        errorMsg = "Account is deleted Contact Admin";
+      } else if (errorMsg.toLowerCase().contains('account is deleted') ||
+          errorMsg.toLowerCase().contains('delete')) {
+        errorMsg = "Account is deleted Contact Admin";
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            authVm.errorMessage ?? "Login failed. Please check credentials.",
-          ),
+          content: Text(errorMsg),
           backgroundColor: Colors.redAccent,
           behavior: SnackBarBehavior.floating,
         ),

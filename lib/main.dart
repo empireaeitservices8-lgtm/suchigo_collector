@@ -1,5 +1,6 @@
 import 'package:adaptive_theme/adaptive_theme.dart';
 import 'package:suchigo_collector/config/app_config.dart';
+import 'package:suchigo_collector/features/home/view/home_screen.dart';
 import 'package:suchigo_collector/l10n/app_localizations.dart';
 
 import 'package:flutter/foundation.dart';
@@ -10,6 +11,9 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import 'package:provider/provider.dart';
 
+import 'helpers/sp_helper.dart';
+import 'features/admin/view/admin_console_screen.dart';
+import 'features/auth/view/login_screen.dart';
 import 'features/admin/view_model/admin_view_model.dart';
 import 'features/auth/view_model/auth_view_model.dart';
 import 'features/history/view_model/history_view_model.dart';
@@ -29,11 +33,28 @@ import 'utils/themes.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await NotificationService().initialize();
-  runApp(const MyApp());
+
+  // Directly resolve initial route without showing splash screen
+  final token = await SpHelper.getString('auth_token');
+  final role = await SpHelper.getString('user_role');
+
+  String initialRoute = LoginScreen.routeName;
+  if (token != null && token.isNotEmpty) {
+    initialRoute = (role?.toLowerCase() == 'admin')
+        ? AdminConsoleScreen.routeName
+        : HomeScreen.routeName;
+  }
+
+  runApp(MyApp(initialRoute: initialRoute));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final String initialRoute;
+
+  const MyApp({
+    super.key,
+    this.initialRoute = LoginScreen.routeName,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -49,7 +70,7 @@ class MyApp extends StatelessWidget {
           create: (context) => LanguageProvider(),
         ),
         ChangeNotifierProvider(
-          create: (context) => AuthViewModel(),
+          create: (context) => AuthViewModel()..checkSavedSession(),
         ),
         ChangeNotifierProvider(
           create: (context) => AdminViewModel(),
@@ -104,7 +125,7 @@ class MyApp extends StatelessWidget {
                 context.watch<LanguageProvider>().locale,
               ),
               locale: context.watch<LanguageProvider>().locale,
-              initialRoute: SplashScreen.routeName,
+              initialRoute: initialRoute,
               onGenerateRoute: onAppGenerateRoute(),
               routes: appRoutes(),
               builder: (context, child) {

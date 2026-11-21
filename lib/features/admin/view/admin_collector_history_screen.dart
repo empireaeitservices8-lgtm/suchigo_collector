@@ -54,6 +54,7 @@ class _AdminCollectorHistoryScreenState
 
   List<_AdminCollectorHistoryRecord> _records = [];
   bool _isLoading = false;
+  bool _hasLoadedHistory = false;
 
   @override
   void initState() {
@@ -65,6 +66,7 @@ class _AdminCollectorHistoryScreenState
   }
 
   void _populateFromHistory(AdminCollectorHistoryModel history) {
+    _hasLoadedHistory = true;
     final defaultVehicleName = widget.collector.vehicleName?.isNotEmpty == true
         ? widget.collector.vehicleName!
         : (history.collector.vehicleName?.isNotEmpty == true
@@ -75,15 +77,20 @@ class _AdminCollectorHistoryScreenState
             ? widget.collector.vehicleNumber!
             : (history.collector.vehicleNumber?.isNotEmpty == true
                 ? history.collector.vehicleNumber!
-                : "N/A");
+                : "");
 
-    _records = history.locations.map((loc) {
+    // Filter only completed tasks in history page (status: completed)
+    final completedLocations = history.locations.where((loc) {
+      final status = loc.status?.trim().toLowerCase();
+      return status == 'completed';
+    }).toList();
+
+    _records = completedLocations.map((loc) {
       return _AdminCollectorHistoryRecord(
         scheduleCode: loc.scheduleCode ?? "BILL-${loc.pickupId ?? loc.id}",
         customerName: loc.name.isNotEmpty ? loc.name : "Customer",
-        customerMobile: loc.contactNumber?.isNotEmpty == true
-            ? loc.contactNumber!
-            : "N/A",
+        customerMobile:
+            loc.contactNumber?.isNotEmpty == true ? loc.contactNumber! : "",
         vehicleName: loc.vehicleName?.isNotEmpty == true
             ? loc.vehicleName!
             : defaultVehicleName,
@@ -96,7 +103,7 @@ class _AdminCollectorHistoryScreenState
                 ? loc.paymentMethod!
                 : "ONLINE")
             .toUpperCase(),
-        date: loc.pickupDate ?? "N/A",
+        date: loc.pickupDate ?? "",
       );
     }).toList();
   }
@@ -112,9 +119,18 @@ class _AdminCollectorHistoryScreenState
         setState(() {
           _populateFromHistory(history);
         });
+      } else if (mounted) {
+        setState(() {
+          _hasLoadedHistory = true;
+        });
       }
     } catch (e) {
       debugPrint('[AdminCollectorHistoryScreen] _loadHistory error: $e');
+      if (mounted) {
+        setState(() {
+          _hasLoadedHistory = true;
+        });
+      }
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -221,20 +237,20 @@ class _AdminCollectorHistoryScreenState
         ? "${widget.collector.vehicleName}${widget.collector.vehicleNumber?.isNotEmpty == true ? ' (${widget.collector.vehicleNumber})' : ''}"
         : "No vehicle assigned";
 
-    final initialLetter = (collectorName.isNotEmpty ? collectorName[0] : "A")
-        .toUpperCase();
+    final initialLetter =
+        (collectorName.isNotEmpty ? collectorName[0] : "A").toUpperCase();
 
     final filteredList = _filteredRecords;
 
     final double totalQuantity = _records.isNotEmpty
         ? _records.fold(0.0, (sum, r) => sum + r.quantityKg)
-        : (widget.stats?.quantityKg ?? 0.0);
+        : (_hasLoadedHistory ? 0.0 : (widget.stats?.quantityKg ?? 0.0));
     final double totalRevenue = _records.isNotEmpty
         ? _records.fold(0.0, (sum, r) => sum + r.amount)
-        : (widget.stats?.revenue ?? 0.0);
+        : (_hasLoadedHistory ? 0.0 : (widget.stats?.revenue ?? 0.0));
     final int pickups = _records.isNotEmpty
         ? _records.length
-        : (widget.stats?.pickups ?? 0);
+        : (_hasLoadedHistory ? 0 : (widget.stats?.pickups ?? 0));
     final double cashCollected = _records
         .where((r) => r.paymentMethod.toUpperCase() == "CASH")
         .fold(0.0, (sum, r) => sum + r.amount);
@@ -242,7 +258,7 @@ class _AdminCollectorHistoryScreenState
         ? _records
             .where((r) => r.paymentMethod.toUpperCase() == "ONLINE")
             .fold(0.0, (sum, r) => sum + r.amount)
-        : totalRevenue;
+        : (_hasLoadedHistory ? 0.0 : totalRevenue);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF3F8F2),
@@ -275,263 +291,264 @@ class _AdminCollectorHistoryScreenState
           physics: const AlwaysScrollableScrollPhysics(
             parent: BouncingScrollPhysics(),
           ),
-          padding: EdgeInsets.symmetric(horizontal: 16.spMin, vertical: 8.spMin),
+          padding:
+              EdgeInsets.symmetric(horizontal: 16.spMin, vertical: 8.spMin),
           child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // 1. Profile & Performance Metrics Card
-            Container(
-              width: double.infinity,
-              padding: EdgeInsets.all(18.spMin),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(22.spMin),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.03),
-                    blurRadius: 10.spMin,
-                    offset: Offset(0, 3.spMin),
-                  ),
-                ],
-              ),
-              child: Column(
-                children: [
-                  // Avatar, Name & Vehicle
-                  Row(
-                    children: [
-                      Container(
-                        width: 44.spMin,
-                        height: 44.spMin,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFE8F5E9),
-                          shape: BoxShape.circle,
-                        ),
-                        alignment: Alignment.center,
-                        child: Text(
-                          initialLetter,
-                          style: TextStyle(
-                            fontSize: 18.spMin,
-                            fontWeight: FontWeight.w800,
-                            color: const Color(0xFF1D723C),
-                          ),
-                        ),
-                      ),
-                      SizedBox(width: 14.spMin),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              collectorName,
-                              style: TextStyle(
-                                fontSize: 16.spMin,
-                                fontWeight: FontWeight.w800,
-                                color: const Color(0xFF212121),
-                              ),
-                            ),
-                            SizedBox(height: 2.spMin),
-                            Text(
-                              vehicleDisplay,
-                              style: TextStyle(
-                                fontSize: 12.5.spMin,
-                                fontWeight: FontWeight.w500,
-                                color: const Color(0xFF757575),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  SizedBox(height: 16.spMin),
-
-                  // Metric Row 1: Total Quantity, Total Revenue, Pickups
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildMetricTile(
-                          label: "Total Quantity",
-                          value: "${totalQuantity.toStringAsFixed(1)} Kg",
-                        ),
-                      ),
-                      SizedBox(width: 8.spMin),
-                      Expanded(
-                        child: _buildMetricTile(
-                          label: "Total Revenue",
-                          value: "₹${totalRevenue.toInt()}",
-                        ),
-                      ),
-                      SizedBox(width: 8.spMin),
-                      Expanded(
-                        child: _buildMetricTile(
-                          label: "Pickups",
-                          value: "$pickups",
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  SizedBox(height: 8.spMin),
-
-                  // Metric Row 2: Cash Collected, Online Collected
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildMetricTile(
-                          label: "Cash Collected",
-                          value: "₹${cashCollected.toInt()}",
-                        ),
-                      ),
-                      SizedBox(width: 8.spMin),
-                      Expanded(
-                        child: _buildMetricTile(
-                          label: "Online Collected",
-                          value: "₹${onlineCollected.toInt()}",
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-
-            SizedBox(height: 16.spMin),
-
-            // 2. Search & Filter Bar
-            Row(
-              children: [
-                Expanded(
-                  child: Container(
-                    height: 48.spMin,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16.spMin),
-                      border: Border.all(
-                        color: const Color(0xFFCDE8CE),
-                        width: 1.spMin,
-                      ),
-                    ),
-                    child: TextField(
-                      controller: _searchController,
-                      onChanged: (val) {
-                        setState(() => _searchQuery = val);
-                      },
-                      style: TextStyle(
-                        fontSize: 14.spMin,
-                        color: SuchigoColors.textDark,
-                      ),
-                      decoration: InputDecoration(
-                        filled: false,
-                        hintText: "Search by customer name, phone...",
-                        hintStyle: TextStyle(
-                          color: const Color(0xFF9E9E9E),
-                          fontSize: 13.spMin,
-                        ),
-                        prefixIcon: Icon(
-                          Icons.search_rounded,
-                          color: const Color(0xFF1D723C),
-                          size: 22.spMin,
-                        ),
-                        border: InputBorder.none,
-                        contentPadding:
-                            EdgeInsets.symmetric(vertical: 13.spMin),
-                      ),
-                    ),
-                  ),
-                ),
-                SizedBox(width: 10.spMin),
-                GestureDetector(
-                  onTap: _showFilterSheet,
-                  child: Container(
-                    width: 48.spMin,
-                    height: 48.spMin,
-                    decoration: BoxDecoration(
-                      color: _selectedPaymentFilter != "All"
-                          ? const Color(0xFFDFF3E0)
-                          : Colors.white,
-                      borderRadius: BorderRadius.circular(16.spMin),
-                      border: Border.all(
-                        color: const Color(0xFFCDE8CE),
-                        width: 1.spMin,
-                      ),
-                    ),
-                    child: Icon(
-                      Icons.tune_rounded,
-                      color: const Color(0xFF1D723C),
-                      size: 22.spMin,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-
-            SizedBox(height: 16.spMin),
-
-            // 3. Collection Cards List
-            if (_isLoading && _records.isEmpty)
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 1. Profile & Performance Metrics Card
               Container(
                 width: double.infinity,
-                padding: EdgeInsets.all(48.spMin),
-                alignment: Alignment.center,
+                padding: EdgeInsets.all(18.spMin),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(20.spMin),
-                ),
-                child: const CircularProgressIndicator(
-                  color: Color(0xFF1D723C),
-                ),
-              )
-            else if (filteredList.isEmpty)
-              Container(
-                width: double.infinity,
-                padding: EdgeInsets.symmetric(
-                  horizontal: 24.spMin,
-                  vertical: 36.spMin,
-                ),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20.spMin),
-                ),
-                child: Column(
-                  children: [
-                    Icon(
-                      Icons.history_toggle_off_rounded,
-                      size: 48.spMin,
-                      color: const Color(0xFFBDBDBD),
-                    ),
-                    SizedBox(height: 12.spMin),
-                    Text(
-                      "No collection history records found",
-                      style: TextStyle(
-                        fontSize: 14.5.spMin,
-                        fontWeight: FontWeight.w600,
-                        color: const Color(0xFF757575),
-                      ),
+                  borderRadius: BorderRadius.circular(22.spMin),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.03),
+                      blurRadius: 10.spMin,
+                      offset: Offset(0, 3.spMin),
                     ),
                   ],
                 ),
-              )
-            else
-              ListView.separated(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: filteredList.length,
-                separatorBuilder: (_, __) => SizedBox(height: 12.spMin),
-                itemBuilder: (context, index) {
-                  final record = filteredList[index];
-                  return _buildHistoryCard(record);
-                },
+                child: Column(
+                  children: [
+                    // Avatar, Name & Vehicle
+                    Row(
+                      children: [
+                        Container(
+                          width: 44.spMin,
+                          height: 44.spMin,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE8F5E9),
+                            shape: BoxShape.circle,
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            initialLetter,
+                            style: TextStyle(
+                              fontSize: 18.spMin,
+                              fontWeight: FontWeight.w800,
+                              color: const Color(0xFF1D723C),
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: 14.spMin),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                collectorName,
+                                style: TextStyle(
+                                  fontSize: 16.spMin,
+                                  fontWeight: FontWeight.w800,
+                                  color: const Color(0xFF212121),
+                                ),
+                              ),
+                              SizedBox(height: 2.spMin),
+                              Text(
+                                vehicleDisplay,
+                                style: TextStyle(
+                                  fontSize: 12.5.spMin,
+                                  fontWeight: FontWeight.w500,
+                                  color: const Color(0xFF757575),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    SizedBox(height: 16.spMin),
+
+                    // Metric Row 1: Total Quantity, Total Revenue, Pickups
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildMetricTile(
+                            label: "Total Quantity",
+                            value: "${totalQuantity.toStringAsFixed(1)} Kg",
+                          ),
+                        ),
+                        SizedBox(width: 8.spMin),
+                        Expanded(
+                          child: _buildMetricTile(
+                            label: "Total Revenue",
+                            value: "₹${totalRevenue.toInt()}",
+                          ),
+                        ),
+                        SizedBox(width: 8.spMin),
+                        Expanded(
+                          child: _buildMetricTile(
+                            label: "Pickups",
+                            value: "$pickups",
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    SizedBox(height: 8.spMin),
+
+                    // Metric Row 2: Cash Collected, Online Collected
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildMetricTile(
+                            label: "Cash Collected",
+                            value: "₹${cashCollected.toInt()}",
+                          ),
+                        ),
+                        SizedBox(width: 8.spMin),
+                        Expanded(
+                          child: _buildMetricTile(
+                            label: "Online Collected",
+                            value: "₹${onlineCollected.toInt()}",
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
 
-            SizedBox(height: 24.spMin),
-          ],
+              SizedBox(height: 16.spMin),
+
+              // 2. Search & Filter Bar
+              Row(
+                children: [
+                  Expanded(
+                    child: Container(
+                      height: 48.spMin,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16.spMin),
+                        border: Border.all(
+                          color: const Color(0xFFCDE8CE),
+                          width: 1.spMin,
+                        ),
+                      ),
+                      child: TextField(
+                        controller: _searchController,
+                        onChanged: (val) {
+                          setState(() => _searchQuery = val);
+                        },
+                        style: TextStyle(
+                          fontSize: 14.spMin,
+                          color: SuchigoColors.textDark,
+                        ),
+                        decoration: InputDecoration(
+                          filled: false,
+                          hintText: "Search by customer name, phone...",
+                          hintStyle: TextStyle(
+                            color: const Color(0xFF9E9E9E),
+                            fontSize: 13.spMin,
+                          ),
+                          prefixIcon: Icon(
+                            Icons.search_rounded,
+                            color: const Color(0xFF1D723C),
+                            size: 22.spMin,
+                          ),
+                          border: InputBorder.none,
+                          contentPadding:
+                              EdgeInsets.symmetric(vertical: 13.spMin),
+                        ),
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: 10.spMin),
+                  GestureDetector(
+                    onTap: _showFilterSheet,
+                    child: Container(
+                      width: 48.spMin,
+                      height: 48.spMin,
+                      decoration: BoxDecoration(
+                        color: _selectedPaymentFilter != "All"
+                            ? const Color(0xFFDFF3E0)
+                            : Colors.white,
+                        borderRadius: BorderRadius.circular(16.spMin),
+                        border: Border.all(
+                          color: const Color(0xFFCDE8CE),
+                          width: 1.spMin,
+                        ),
+                      ),
+                      child: Icon(
+                        Icons.tune_rounded,
+                        color: const Color(0xFF1D723C),
+                        size: 22.spMin,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              SizedBox(height: 16.spMin),
+
+              // 3. Collection Cards List
+              if (_isLoading && _records.isEmpty)
+                Container(
+                  width: double.infinity,
+                  padding: EdgeInsets.all(48.spMin),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20.spMin),
+                  ),
+                  child: const CircularProgressIndicator(
+                    color: Color(0xFF1D723C),
+                  ),
+                )
+              else if (filteredList.isEmpty)
+                Container(
+                  width: double.infinity,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: 24.spMin,
+                    vertical: 36.spMin,
+                  ),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20.spMin),
+                  ),
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.history_toggle_off_rounded,
+                        size: 48.spMin,
+                        color: const Color(0xFFBDBDBD),
+                      ),
+                      SizedBox(height: 12.spMin),
+                      Text(
+                        "No collection history records found",
+                        style: TextStyle(
+                          fontSize: 14.5.spMin,
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFF757575),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: filteredList.length,
+                  separatorBuilder: (_, __) => SizedBox(height: 12.spMin),
+                  itemBuilder: (context, index) {
+                    final record = filteredList[index];
+                    return _buildHistoryCard(record);
+                  },
+                ),
+
+              SizedBox(height: 24.spMin),
+            ],
+          ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildMetricTile({required String label, required String value}) {
     return Container(

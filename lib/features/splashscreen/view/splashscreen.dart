@@ -18,38 +18,35 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
-  Timer? _timer;
-
   @override
   void initState() {
     super.initState();
-    _checkAuthAndNavigate();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkAuthAndNavigate();
+    });
   }
 
-  void _checkAuthAndNavigate() {
-    _timer = Timer(const Duration(milliseconds: 2000), () async {
-      if (!mounted) return;
+  void _checkAuthAndNavigate() async {
+    if (!mounted) return;
 
-      final authVm = context.read<AuthViewModel>();
-      final hasActiveSession = await authVm.checkSavedSession();
+    final authVm = context.read<AuthViewModel>();
+    final hasActiveSession = await authVm.checkSavedSession();
 
-      if (!mounted) return;
+    if (!mounted) return;
 
-      if (hasActiveSession) {
-        if (authVm.isAdmin) {
-          Navigator.pushReplacementNamed(context, AdminConsoleScreen.routeName);
-        } else {
-          Navigator.pushReplacementNamed(context, HomeScreen.routeName);
-        }
+    if (hasActiveSession) {
+      if (authVm.isAdmin) {
+        Navigator.pushReplacementNamed(context, AdminConsoleScreen.routeName);
       } else {
-        Navigator.pushReplacementNamed(context, LoginScreen.routeName);
+        Navigator.pushReplacementNamed(context, HomeScreen.routeName);
       }
-    });
+    } else {
+      Navigator.pushReplacementNamed(context, LoginScreen.routeName);
+    }
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
     super.dispose();
   }
 
@@ -66,9 +63,9 @@ class _SplashScreenState extends State<SplashScreen> {
             children: [
               const Spacer(flex: 3),
 
-              // Centered Exact SuchiGo Logo
+              // Centered SuchiGo Logo
               Image.asset(
-                'assets/images/suchigo_logo_exact.png',
+                'assets/images/suchigo_logo.jpg',
                 width: 220.spMin,
                 fit: BoxFit.contain,
               ),

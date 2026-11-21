@@ -42,7 +42,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
     ].where((e) => e != null && e.trim().isNotEmpty).toList();
 
     if (parts.isEmpty) {
-      return order.ward ?? "9F, Infopark Phase 2, Kochi, Kakkanad, Kerala";
+      return order.ward ?? "";
     }
     return parts.join(", ");
   }
@@ -96,7 +96,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
     final order = widget.order;
     final isReaching = context.watch<OrderViewModel>().isReaching;
     final fullAddress = _formatAddress(order);
-    final displayName = order.name.isNotEmpty ? order.name : "Raina";
+    final displayName = order.name.isNotEmpty ? order.name : "";
 
     final screenSize = MediaQuery.of(context).size;
 
@@ -118,7 +118,8 @@ class _NavigationScreenState extends State<NavigationScreen> {
                 child: CustomPaint(
                   size: Size(screenSize.width, screenSize.height),
                   painter: _MapCanvasPainter(),
-                  child: _buildMapOverlayMarkers(screenSize.width, screenSize.height),
+                  child: _buildMapOverlayMarkers(
+                      screenSize.width, screenSize.height),
                 ),
               ),
 
@@ -194,7 +195,8 @@ class _NavigationScreenState extends State<NavigationScreen> {
                                 SizedBox(width: 12.spMin),
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       Text(
@@ -207,14 +209,14 @@ class _NavigationScreenState extends State<NavigationScreen> {
                                         ),
                                       ),
                                       SizedBox(height: 2.spMin),
-                                      Text(
-                                        "Total distance: 0.2 km",
-                                        style: TextStyle(
-                                          fontSize: 11.5.spMin,
-                                          fontWeight: FontWeight.w500,
-                                          color: const Color(0xFFE0F2E9),
-                                        ),
-                                      ),
+                                      // Text(
+                                      //   "Total distance: 0.2 km",
+                                      //   style: TextStyle(
+                                      //     fontSize: 11.5.spMin,
+                                      //     fontWeight: FontWeight.w500,
+                                      //     color: const Color(0xFFE0F2E9),
+                                      //   ),
+                                      // ),
                                     ],
                                   ),
                                 ),
@@ -262,47 +264,47 @@ class _NavigationScreenState extends State<NavigationScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                "2 mins",
-                                style: TextStyle(
-                                  fontSize: 22.spMin,
-                                  fontWeight: FontWeight.w900,
-                                  color: const Color(0xFF135C30),
-                                  letterSpacing: -0.4.spMin,
-                                ),
-                              ),
-                              SizedBox(height: 2.spMin),
-                              Text(
-                                "0.2 km left to customer",
-                                style: TextStyle(
-                                  fontSize: 13.spMin,
-                                  fontWeight: FontWeight.w600,
-                                  color: const Color(0xFF757575),
-                                ),
-                              ),
-                            ],
-                          ),
-                          Container(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: 14.spMin,
-                              vertical: 6.spMin,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFE8F5E9),
-                              borderRadius: BorderRadius.circular(12.spMin),
-                            ),
-                            child: Text(
-                              "ETD: $_estimatedTime",
-                              style: TextStyle(
-                                fontSize: 13.spMin,
-                                fontWeight: FontWeight.w800,
-                                color: const Color(0xFF1D723C),
-                              ),
-                            ),
-                          ),
+                          // Column(
+                          //   crossAxisAlignment: CrossAxisAlignment.start,
+                          //   children: [
+                          //     Text(
+                          //       "2 mins",
+                          //       style: TextStyle(
+                          //         fontSize: 22.spMin,
+                          //         fontWeight: FontWeight.w900,
+                          //         color: const Color(0xFF135C30),
+                          //         letterSpacing: -0.4.spMin,
+                          //       ),
+                          //     ),
+                          //     SizedBox(height: 2.spMin),
+                          //     Text(
+                          //       "0.2 km left to customer",
+                          //       style: TextStyle(
+                          //         fontSize: 13.spMin,
+                          //         fontWeight: FontWeight.w600,
+                          //         color: const Color(0xFF757575),
+                          //       ),
+                          //     ),
+                          //   ],
+                          // ),
+                          // Container(
+                          //   padding: EdgeInsets.symmetric(
+                          //     horizontal: 14.spMin,
+                          //     vertical: 6.spMin,
+                          //   ),
+                          //   decoration: BoxDecoration(
+                          //     color: const Color(0xFFE8F5E9),
+                          //     borderRadius: BorderRadius.circular(12.spMin),
+                          //   ),
+                          //   child: Text(
+                          //     "ETD: $_estimatedTime",
+                          //     style: TextStyle(
+                          //       fontSize: 13.spMin,
+                          //       fontWeight: FontWeight.w800,
+                          //       color: const Color(0xFF1D723C),
+                          //     ),
+                          //   ),
+                          // ),
                         ],
                       ),
 
@@ -401,46 +403,6 @@ class _NavigationScreenState extends State<NavigationScreen> {
                       ),
 
                       SizedBox(height: 10.spMin),
-
-                      // Button 2: I have Reached Location (Green)
-                      SizedBox(
-                        width: double.infinity,
-                        height: 48.spMin,
-                        child: ElevatedButton(
-                          onPressed: isReaching ? null : _handleReachedLocation,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF1D723C),
-                            foregroundColor: Colors.white,
-                            disabledBackgroundColor: const Color(0xFF81C784),
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14.spMin),
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.check_circle_outline_rounded,
-                                color: Colors.white,
-                                size: 20.spMin,
-                              ),
-                              SizedBox(width: 8.spMin),
-                              Text(
-                                isReaching
-                                    ? "Updating Status..."
-                                    : "I have Reached Location",
-                                style: TextStyle(
-                                  fontSize: 14.5.spMin,
-                                  fontWeight: FontWeight.w800,
-                                  color: Colors.white,
-                                  letterSpacing: 0.2.spMin,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
                     ],
                   ),
                 ),
@@ -459,16 +421,15 @@ class _NavigationScreenState extends State<NavigationScreen> {
         Positioned(
           left: w * 0.05,
           top: h * 0.31,
-          child: _buildLandmarkBadge(
-              "Trans Asia Cyber Park\nട്രാൻസ് ഏഷ്യ സൈബർ പാർക്ക്"),
+          child: _buildLandmarkBadge(""),
         ),
 
         // Landmark 2: Global Travels
         Positioned(
           left: w * 0.04,
           top: h * 0.38,
-          child: _buildLandmarkIcon(
-              Icons.location_on_rounded, "Global Travels"),
+          child:
+              _buildLandmarkIcon(Icons.location_on_rounded, "Global Travels"),
         ),
 
         // Landmark 3: DDG BIM Services
@@ -483,16 +444,14 @@ class _NavigationScreenState extends State<NavigationScreen> {
         Positioned(
           right: w * 0.22,
           top: h * 0.46,
-          child: _buildLandmarkIcon(
-              Icons.location_on_rounded, "LSG\nഎൽഎസ്എ"),
+          child: _buildLandmarkIcon(Icons.location_on_rounded, "LSG\nഎൽഎസ്എ"),
         ),
 
         // Landmark 5: Santa Techy
         Positioned(
           left: w * 0.18,
           top: h * 0.55,
-          child: _buildLandmarkIcon(
-              Icons.location_on_rounded, "Santa Techy"),
+          child: _buildLandmarkIcon(Icons.location_on_rounded, "Santa Techy"),
         ),
 
         // Destination Pin: Red marker with 12th Floor tag
@@ -572,7 +531,6 @@ class _NavigationScreenState extends State<NavigationScreen> {
       ],
     );
   }
-
 
   Widget _buildLandmarkBadge(String title) {
     return Row(
@@ -711,5 +669,3 @@ class _MapCanvasPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
-
-

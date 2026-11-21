@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:suchigo_collector/features/home/view/home_screen.dart';
 import 'package:suchigo_collector/features/orders/view/update_status_screen.dart';
@@ -29,7 +30,7 @@ class _ActiveOrdersScreenState extends State<ActiveOrdersScreen> {
       if (mounted) {
         final orderVm = context.read<OrderViewModel>();
         orderVm.setWardFilter(widget.filterWard);
-        orderVm.fetchActiveOrders();
+        orderVm.fetchActiveOrders(ward: widget.filterWard);
       }
     });
   }
@@ -65,6 +66,56 @@ class _ActiveOrdersScreenState extends State<ActiveOrdersScreen> {
       return order.ward ?? "No address specified";
     }
     return parts.join(", ");
+  }
+
+  String _formatPickupDate(String? rawDate, {String? dayOfWeek, String? display}) {
+    if (display != null && display.trim().isNotEmpty) {
+      return display.trim();
+    }
+    if (rawDate == null ||
+        rawDate.trim().isEmpty ||
+        rawDate.trim().toLowerCase() == 'null') {
+      return "Today";
+    }
+    final trimmed = rawDate.trim();
+    try {
+      final parsed = DateTime.tryParse(trimmed);
+      if (parsed != null) {
+        final day = dayOfWeek?.trim().isNotEmpty == true
+            ? dayOfWeek!.trim()
+            : DateFormat('EEEE').format(parsed);
+        return "$day, ${DateFormat('dd MMM yyyy').format(parsed)}";
+      }
+    } catch (_) {}
+
+    // Handle formats like YYYY-MM-DD, DD-MM-YYYY, or DD/MM/YYYY
+    try {
+      final delimiter =
+          trimmed.contains('-') ? '-' : (trimmed.contains('/') ? '/' : null);
+      if (delimiter != null) {
+        final parts = trimmed.split(delimiter);
+        if (parts.length == 3) {
+          int? y;
+          int? m;
+          int? d;
+          if (parts[0].length == 4) {
+            y = int.tryParse(parts[0]);
+            m = int.tryParse(parts[1]);
+            d = int.tryParse(parts[2].split('T')[0].split(' ')[0]);
+          } else if (parts[2].length >= 4) {
+            d = int.tryParse(parts[0]);
+            m = int.tryParse(parts[1]);
+            y = int.tryParse(parts[2].split('T')[0].split(' ')[0]);
+          }
+          if (y != null && m != null && d != null) {
+            final dt = DateTime(y, m, d);
+            return DateFormat('dd MMM yyyy').format(dt);
+          }
+        }
+      }
+    } catch (_) {}
+
+    return trimmed;
   }
 
   @override
@@ -110,11 +161,11 @@ class _ActiveOrdersScreenState extends State<ActiveOrdersScreen> {
                           ),
                         ),
                       ),
-                      SizedBox(width: 14.spMin),
+                      SizedBox(width: 10.spMin),
                       Text(
                         "Active Orders",
                         style: TextStyle(
-                          fontSize: 20.spMin,
+                          fontSize: 19.spMin,
                           fontWeight: FontWeight.w800,
                           color: const Color(0xFF135C30),
                           letterSpacing: -0.3.spMin,
@@ -123,40 +174,46 @@ class _ActiveOrdersScreenState extends State<ActiveOrdersScreen> {
                       if (orderVm.wardFilter != null &&
                           orderVm.wardFilter!.trim().isNotEmpty) ...[
                         SizedBox(width: 8.spMin),
-                        Container(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: 8.spMin,
-                            vertical: 3.spMin,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFE8F5E9),
-                            borderRadius: BorderRadius.circular(12.spMin),
-                            border: Border.all(
-                              color: const Color(0xFF81C784),
-                              width: 1.spMin,
+                        Flexible(
+                          child: Container(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 8.spMin,
+                              vertical: 3.spMin,
                             ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                orderVm.wardFilter!,
-                                style: TextStyle(
-                                  fontSize: 11.spMin,
-                                  fontWeight: FontWeight.w700,
-                                  color: const Color(0xFF1D723C),
-                                ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE8F5E9),
+                              borderRadius: BorderRadius.circular(12.spMin),
+                              border: Border.all(
+                                color: const Color(0xFF81C784),
+                                width: 1.spMin,
                               ),
-                              SizedBox(width: 4.spMin),
-                              GestureDetector(
-                                onTap: () => orderVm.setWardFilter(null),
-                                child: Icon(
-                                  Icons.close_rounded,
-                                  size: 13.spMin,
-                                  color: const Color(0xFF1D723C),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    orderVm.wardFilter!,
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
+                                    style: TextStyle(
+                                      fontSize: 11.spMin,
+                                      fontWeight: FontWeight.w700,
+                                      color: const Color(0xFF1D723C),
+                                    ),
+                                  ),
                                 ),
-                              ),
-                            ],
+                                SizedBox(width: 4.spMin),
+                                GestureDetector(
+                                  onTap: () => orderVm.setWardFilter(null),
+                                  child: Icon(
+                                    Icons.close_rounded,
+                                    size: 13.spMin,
+                                    color: const Color(0xFF1D723C),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ],
@@ -348,173 +405,217 @@ class _ActiveOrdersScreenState extends State<ActiveOrdersScreen> {
             ),
           ],
         ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Row 1: Name + Order ID Badge
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                order.name,
-                style: TextStyle(
-                  fontSize: 16.spMin,
-                  fontWeight: FontWeight.w800,
-                  color: const Color(0xFF1A1A1A),
-                ),
-              ),
-              Container(
-                padding: EdgeInsets.symmetric(
-                  horizontal: 10.spMin,
-                  vertical: 4.spMin,
-                ),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE8F5E9),
-                  borderRadius: BorderRadius.circular(8.spMin),
-                ),
-                child: Text(
-                  "ORD-${order.id}",
-                  style: TextStyle(
-                    fontSize: 11.5.spMin,
-                    fontWeight: FontWeight.w800,
-                    color: const Color(0xFF1D723C),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Row 1: Name + Order ID Badge
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    order.name,
+                    style: TextStyle(
+                      fontSize: 16.spMin,
+                      fontWeight: FontWeight.w800,
+                      color: const Color(0xFF1A1A1A),
+                    ),
                   ),
                 ),
+                SizedBox(width: 8.spMin),
+                if (order.status?.toLowerCase().trim() == 'rescheduled' ||
+                    order.status?.toLowerCase().trim() == 'reschedule') ...[
+                  Container(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: 8.spMin,
+                      vertical: 4.spMin,
+                    ),
+                    margin: EdgeInsets.only(right: 6.spMin),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF3E0),
+                      borderRadius: BorderRadius.circular(8.spMin),
+                      border: Border.all(
+                        color: const Color(0xFFFFB74D),
+                        width: 1.spMin,
+                      ),
+                    ),
+                    child: Text(
+                      "Rescheduled",
+                      style: TextStyle(
+                        fontSize: 11.spMin,
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xFFE65100),
+                      ),
+                    ),
+                  ),
+                ],
+                Container(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: 10.spMin,
+                    vertical: 4.spMin,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE8F5E9),
+                    borderRadius: BorderRadius.circular(8.spMin),
+                  ),
+                  child: Text(
+                    "ORD-${order.id}",
+                    style: TextStyle(
+                      fontSize: 11.5.spMin,
+                      fontWeight: FontWeight.w800,
+                      color: const Color(0xFF1D723C),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+
+            SizedBox(height: 12.spMin),
+
+            // Row 2: Phone Number
+            if (order.contactNumber != null &&
+                order.contactNumber!.trim().isNotEmpty) ...[
+              _buildDetailRow(
+                icon: Icons.phone_android_rounded,
+                text: order.contactNumber!,
               ),
+              SizedBox(height: 8.spMin),
             ],
-          ),
 
-          SizedBox(height: 12.spMin),
+            // Row 3: Ward
+            if (order.ward != null && order.ward!.trim().isNotEmpty) ...[
+              _buildDetailRow(
+                icon: Icons.grid_view_rounded,
+                text: "Ward: ${WardModel.formatWardName(order.ward!)}",
+              ),
+              SizedBox(height: 8.spMin),
+            ],
 
-          // Row 2: Phone Number
-          if (order.contactNumber != null &&
-              order.contactNumber!.trim().isNotEmpty) ...[
+            // Row 4: Full Address
             _buildDetailRow(
-              icon: Icons.phone_android_rounded,
-              text: order.contactNumber!,
+              icon: Icons.map_outlined,
+              text: fullAddress,
             ),
             SizedBox(height: 8.spMin),
-          ],
 
-          // Row 3: Ward
-          if (order.ward != null && order.ward!.trim().isNotEmpty) ...[
+            // Row 5: Items & Bags
             _buildDetailRow(
-              icon: Icons.grid_view_rounded,
-              text: "Ward: ${WardModel.formatWardName(order.ward!)}",
+              icon: Icons.shopping_bag_outlined,
+              text: "Items: $itemsDesc • Bags: 0",
             ),
-            SizedBox(height: 8.spMin),
+
+            SizedBox(height: 14.spMin),
+
+            // Divider
+            Divider(
+              color: const Color(0xFFF5F5F5),
+              thickness: 1.spMin,
+              height: 1.spMin,
+            ),
+
+            SizedBox(height: 12.spMin),
+
+            // Row 6: Pickup Date Pill + 3 Action Buttons (Chat, Map, Phone)
+            Row(
+              children: [
+                // Pickup Date Pill (from API pickup_date)
+                Container(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: 12.spMin,
+                    vertical: 6.spMin,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE8F5E9),
+                    borderRadius: BorderRadius.circular(10.spMin),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.calendar_today_rounded,
+                        size: 13.spMin,
+                        color: const Color(0xFF1D723C),
+                      ),
+                      SizedBox(width: 6.spMin),
+                      Text(
+                        _formatPickupDate(
+                          order.pickupDate,
+                          dayOfWeek: order.dayOfWeek,
+                          display: order.pickupDateDisplay,
+                        ),
+                        style: TextStyle(
+                          fontSize: 12.5.spMin,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF1D723C),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const Spacer(),
+
+                // Button 1: WhatsApp
+                GestureDetector(
+                  onTap: () => _openWhatsApp(order.contactNumber),
+                  child: Container(
+                    width: 38.spMin,
+                    height: 38.spMin,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFE8F5E9),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.chat_bubble_outline_rounded,
+                      color: const Color(0xFF1D723C),
+                      size: 18.spMin,
+                    ),
+                  ),
+                ),
+
+                SizedBox(width: 8.spMin),
+
+                // Button 2: Map Location (Google Maps)
+                GestureDetector(
+                  onTap: () => _openGoogleMaps(fullAddress),
+                  child: Container(
+                    width: 38.spMin,
+                    height: 38.spMin,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFE3F2FD),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.location_on_rounded,
+                      color: const Color(0xFF1976D2),
+                      size: 18.spMin,
+                    ),
+                  ),
+                ),
+
+                SizedBox(width: 8.spMin),
+
+                // Button 3: Call Customer (Dialer)
+                GestureDetector(
+                  onTap: () => _openDialer(order.contactNumber),
+                  child: Container(
+                    width: 38.spMin,
+                    height: 38.spMin,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFE8F5E9),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.phone_rounded,
+                      color: const Color(0xFF1D723C),
+                      size: 18.spMin,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ],
-
-          // Row 4: Full Address
-          _buildDetailRow(
-            icon: Icons.map_outlined,
-            text: fullAddress,
-          ),
-          SizedBox(height: 8.spMin),
-
-          // Row 5: Items & Bags
-          _buildDetailRow(
-            icon: Icons.shopping_bag_outlined,
-            text: "Items: $itemsDesc • Bags: 0",
-          ),
-
-          SizedBox(height: 14.spMin),
-
-          // Divider
-          Divider(
-            color: const Color(0xFFF5F5F5),
-            thickness: 1.spMin,
-            height: 1.spMin,
-          ),
-
-          SizedBox(height: 12.spMin),
-
-          // Row 6: Today Pill + 3 Action Buttons (Chat, Map, Phone)
-          Row(
-            children: [
-              // Today Pill
-              Container(
-                padding: EdgeInsets.symmetric(
-                  horizontal: 14.spMin,
-                  vertical: 6.spMin,
-                ),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE8F5E9),
-                  borderRadius: BorderRadius.circular(10.spMin),
-                ),
-                child: Text(
-                  "Today",
-                  style: TextStyle(
-                    fontSize: 12.5.spMin,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF1D723C),
-                  ),
-                ),
-              ),
-
-              const Spacer(),
-
-              // Button 1: WhatsApp
-              GestureDetector(
-                onTap: () => _openWhatsApp(order.contactNumber),
-                child: Container(
-                  width: 38.spMin,
-                  height: 38.spMin,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFE8F5E9),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.chat_bubble_outline_rounded,
-                    color: const Color(0xFF1D723C),
-                    size: 18.spMin,
-                  ),
-                ),
-              ),
-
-              SizedBox(width: 8.spMin),
-
-              // Button 2: Map Location (Google Maps)
-              GestureDetector(
-                onTap: () => _openGoogleMaps(fullAddress),
-                child: Container(
-                  width: 38.spMin,
-                  height: 38.spMin,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFE3F2FD),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.location_on_rounded,
-                    color: const Color(0xFF1976D2),
-                    size: 18.spMin,
-                  ),
-                ),
-              ),
-
-              SizedBox(width: 8.spMin),
-
-              // Button 3: Call Customer (Dialer)
-              GestureDetector(
-                onTap: () => _openDialer(order.contactNumber),
-                child: Container(
-                  width: 38.spMin,
-                  height: 38.spMin,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFE8F5E9),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.phone_rounded,
-                    color: const Color(0xFF1D723C),
-                    size: 18.spMin,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
+        ),
       ),
     );
   }

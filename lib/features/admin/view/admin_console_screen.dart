@@ -8,6 +8,10 @@ import 'package:suchigo_collector/features/admin/view/tabs/admin_setup_tab.dart'
 import 'package:suchigo_collector/features/admin/view_model/admin_view_model.dart';
 import 'package:suchigo_collector/features/auth/view/login_screen.dart';
 import 'package:suchigo_collector/features/auth/view_model/auth_view_model.dart';
+import 'package:suchigo_collector/features/history/view_model/history_view_model.dart';
+import 'package:suchigo_collector/features/home/view_model/home_view_model.dart';
+import 'package:suchigo_collector/features/orders/view_model/order_view_model.dart';
+import 'package:suchigo_collector/features/wards/view_model/ward_view_model.dart';
 import 'package:suchigo_collector/utils/suchigo_colors.dart';
 
 class AdminConsoleScreen extends StatefulWidget {
@@ -93,6 +97,10 @@ class _AdminConsoleScreenState extends State<AdminConsoleScreen> {
     );
 
     if (shouldLogout == true && mounted) {
+      await context.read<HomeViewModel>().clearSelections();
+      context.read<WardViewModel>().reset();
+      context.read<OrderViewModel>().reset();
+      context.read<HistoryViewModel>().reset();
       await context.read<AuthViewModel>().logout();
       if (mounted) {
         Navigator.pushNamedAndRemoveUntil(

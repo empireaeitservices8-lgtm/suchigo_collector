@@ -7,20 +7,26 @@ class AdminCollectorStats {
   final double quantityKg;
   final double revenue;
   final int pickups;
+  final double cashCollected;
+  final double onlineCollected;
   final bool isOnDuty;
   final bool hasVehicle;
   final String localBody;
   final String ward;
+  final String district;
 
   AdminCollectorStats({
     required this.collector,
     this.quantityKg = 0.0,
     this.revenue = 0.0,
     this.pickups = 0,
+    this.cashCollected = 0.0,
+    this.onlineCollected = 0.0,
     this.isOnDuty = true,
     this.hasVehicle = true,
-    this.localBody = "Kochi Corporation",
-    this.ward = "ERAVIMANGALAM",
+    this.localBody = "",
+    this.ward = "",
+    this.district = "",
   });
 }
 
@@ -166,17 +172,35 @@ class AdminViewModel extends ChangeNotifier {
     return 122.5;
   }
 
-  double get totalRevenue {
-    if (_dashboardData != null && _dashboardData!.statistics.totalRevenue > 0) {
-      return _dashboardData!.statistics.totalRevenue;
-    }
-    return 60374.85;
-  }
+  double get totalRevenue =>
+      _dashboardData?.statistics.totalRevenue ?? 63815.85;
 
   double get pendingCash => _dashboardData?.statistics.pendingCash ?? 0.0;
 
-  double get cashRevenue => pendingCash;
-  double get onlineRevenue => 0.0;
+  double get cashRevenue =>
+      _dashboardData?.statistics.totalCash ?? 25435.0;
+
+  double get onlineRevenue =>
+      _dashboardData?.statistics.totalOnline ?? 38380.85;
+
+  double get cashPercentage {
+    final total = cashRevenue + onlineRevenue;
+    if (total <= 0) return 50.0;
+    return (cashRevenue / total) * 100;
+  }
+
+  double get onlinePercentage {
+    final total = cashRevenue + onlineRevenue;
+    if (total <= 0) return 50.0;
+    return (onlineRevenue / total) * 100;
+  }
+
+  String formatCurrency(double amount) {
+    if (amount % 1 == 0) {
+      return "₹${amount.toInt()}";
+    }
+    return "₹${amount.toStringAsFixed(2)}";
+  }
 
   AdminViewModel() {
     _loadInitialMockData();
@@ -270,28 +294,51 @@ class AdminViewModel extends ChangeNotifier {
   ];
 
   static AdminCollectorStats _createStatsForCollector(CollectorModel c, int index) {
-    final isAmal = c.id == 19 ||
-        c.name.trim().toLowerCase() == "amal" ||
-        c.username.trim().toLowerCase() == "amal";
+    // Read actual total_quantity, total_revenue, pickups from API (fallback to 0.0)
+    final double quantity = c.totalQuantity > 0
+        ? c.totalQuantity
+        : (c.quantity > 0 ? c.quantity : 0.0);
+    final double revenue = c.totalRevenue > 0
+        ? c.totalRevenue
+        : (c.revenue > 0 ? c.revenue : 0.0);
+    final int pickups = c.totalPickups > 0
+        ? c.totalPickups
+        : (c.pickups > 0 ? c.pickups : 0);
+    final double cash = c.cashCollected;
+    final double online = c.onlineCollected;
 
-    final double quantity =
-        isAmal ? 35.0 : _sampleQuantities[index % _sampleQuantities.length];
-    final double revenue =
-        isAmal ? 88.0 : _sampleRevenues[index % _sampleRevenues.length];
-    final int pickups =
-        isAmal ? 2 : _samplePickups[index % _samplePickups.length];
+    final bool hasVehicle =
+        c.vehicleName != null && c.vehicleName!.trim().isNotEmpty;
+    final bool isOnDuty = (c.isActive == true) || pickups > 0 || hasVehicle;
+
+    final String resolvedLocalBody = (c.localBodyName != null && c.localBodyName!.trim().isNotEmpty)
+        ? c.localBodyName!.trim()
+        : ((c.localBody != null && c.localBody!.trim().isNotEmpty)
+            ? c.localBody!.trim()
+            : "");
+    final String resolvedDistrict = (c.district != null && c.district!.trim().isNotEmpty)
+        ? c.district!.trim()
+        : "";
+    final String resolvedWard = (c.ward != null && c.ward!.trim().isNotEmpty)
+        ? c.ward!.trim()
+        : "";
 
     return AdminCollectorStats(
       collector: c,
-      isOnDuty: index % 5 != 0, // 80% on duty, 20% off duty
-      hasVehicle: c.vehicleName != null && c.vehicleName!.trim().isNotEmpty
-          ? true
-          : (index % 4 != 0),
-      localBody: _sampleLocalBodies[index % _sampleLocalBodies.length],
-      ward: _sampleWards[index % _sampleWards.length],
+      isOnDuty: isOnDuty,
+      hasVehicle: hasVehicle,
+      localBody: resolvedLocalBody.isNotEmpty
+          ? resolvedLocalBody
+          : _sampleLocalBodies[index % _sampleLocalBodies.length],
+      ward: resolvedWard.isNotEmpty
+          ? resolvedWard
+          : _sampleWards[index % _sampleWards.length],
+      district: resolvedDistrict,
       quantityKg: quantity,
       revenue: revenue,
       pickups: pickups,
+      cashCollected: cash,
+      onlineCollected: online,
     );
   }
 
@@ -541,9 +588,12 @@ class AdminViewModel extends ChangeNotifier {
           quantityKg: oldStat.quantityKg,
           revenue: oldStat.revenue,
           pickups: oldStat.pickups,
+          cashCollected: oldStat.cashCollected,
+          onlineCollected: oldStat.onlineCollected,
           isOnDuty: oldStat.isOnDuty,
           hasVehicle: vehicleModel != null && vehicleModel.isNotEmpty,
           localBody: oldStat.localBody,
+          district: oldStat.district,
           ward: oldStat.ward,
         );
         notifyListeners();
@@ -565,12 +615,15 @@ class AdminViewModel extends ChangeNotifier {
         bagCount: bagCount,
       );
       if (res is Map<String, dynamic>) {
-        return res;
+        return {'success': true, ...res};
       }
-      return {'message': 'Bags assigned successfully'};
+      return {'success': true, 'message': 'Bags assigned successfully'};
     } catch (e) {
       debugPrint('[AdminViewModel] assignBags error: $e');
-      return null;
+      return {
+        'success': false,
+        'error': e.toString().replaceAll('Exception: ', ''),
+      };
     }
   }
 

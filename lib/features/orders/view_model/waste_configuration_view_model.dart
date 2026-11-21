@@ -34,19 +34,25 @@ class WasteConfigurationViewModel extends ChangeNotifier {
     'SMALL': 5.0,
   };
 
-  double _ratePerKg = 42.0;
+  double _ratePerKg = 0.0;
   String? _disposalLocationName;
   double _enteredWeight = 0.0;
-  final double _walletBalance = 80.0;
+  double _walletBalance = 0.0;
   bool _redeemWallet = false;
+  LocationPickupModel? _currentOrder;
 
   String _paymentMode = 'online'; // 'cash' or 'online'
   String? _qrCodeBase64;
   String? _qrCodeUrl;
   String? _razorpayOrderId;
+  dynamic _currentBillId;
   bool _isLoadingQr = false;
   bool _isProcessingPayment = false;
+  bool _isPaymentSuccess = false;
+  double? _receivedPaymentAmount;
+  String? _receivedPaymentUserName;
 
+  LocationPickupModel? get currentOrder => _currentOrder;
   int get selectedTab => _selectedTab;
   bool get isLoading => _isLoading;
   List<Map<String, dynamic>> get wasteTypes => _wasteTypes;
@@ -54,17 +60,44 @@ class WasteConfigurationViewModel extends ChangeNotifier {
   Map<String, int> get bagQuantities => _bagQuantities;
   List<Map<String, dynamic>> get availableBags => _availableBags;
   Map<String, double> get bagPrices => _bagPrices;
+  int get totalBags {
+    int total = 0;
+    _bagQuantities.forEach((_, qty) => total += qty);
+    return total;
+  }
+  bool get hasBags => _bagQuantities.isNotEmpty && totalBags > 0;
+  bool get hasWeight => _enteredWeight > 0;
+  bool get isConfigurationValid => hasBags && hasWeight;
   double get ratePerKg => _ratePerKg;
   String? get disposalLocationName => _disposalLocationName;
   double get enteredWeight => _enteredWeight;
-  double get walletBalance => _walletBalance;
+  double get walletBalance =>
+      _walletBalance > 0 ? _walletBalance : (_currentOrder?.walletBalance ?? 0.0);
   bool get redeemWallet => _redeemWallet;
   String get paymentMode => _paymentMode;
   String? get qrCodeBase64 => _qrCodeBase64;
   String? get qrCodeUrl => _qrCodeUrl;
   String? get razorpayOrderId => _razorpayOrderId;
+  dynamic get currentBillId => _currentBillId;
   bool get isLoadingQr => _isLoadingQr;
   bool get isProcessingPayment => _isProcessingPayment;
+  bool get isPaymentSuccess => _isPaymentSuccess;
+  double? get receivedPaymentAmount => _receivedPaymentAmount;
+  String? get receivedPaymentUserName => _receivedPaymentUserName;
+
+  void markPaymentSuccess({double? amount, String? userName}) {
+    _isPaymentSuccess = true;
+    _receivedPaymentAmount = amount ?? finalTotal;
+    _receivedPaymentUserName = userName;
+    notifyListeners();
+  }
+
+  void resetPaymentSuccess() {
+    _isPaymentSuccess = false;
+    _receivedPaymentAmount = null;
+    _receivedPaymentUserName = null;
+    notifyListeners();
+  }
 
   double get subtotal {
     double total = 0.0;
@@ -84,7 +117,7 @@ class WasteConfigurationViewModel extends ChangeNotifier {
 
   double get discount {
     if (!_redeemWallet) return 0.0;
-    return subtotal > _walletBalance ? _walletBalance : subtotal;
+    return subtotal > walletBalance ? walletBalance : subtotal;
   }
 
   double get finalTotal {
@@ -98,12 +131,30 @@ class WasteConfigurationViewModel extends ChangeNotifier {
   }
 
   void setWeight(double weight) {
+    if (_enteredWeight != weight) {
+      _currentBillId = null;
+      _qrCodeBase64 = null;
+      _qrCodeUrl = null;
+      _razorpayOrderId = null;
+      _isPaymentSuccess = false;
+      _receivedPaymentAmount = null;
+      _receivedPaymentUserName = null;
+    }
     _enteredWeight = weight;
     notifyListeners();
   }
 
   void toggleRedeemWallet() {
+    if (walletBalance <= 0 && !_redeemWallet) return;
     _redeemWallet = !_redeemWallet;
+    _currentBillId = null;
+    _qrCodeBase64 = null;
+    _qrCodeUrl = null;
+    _razorpayOrderId = null;
+    _currentBillId = null;
+    _isPaymentSuccess = false;
+    _receivedPaymentAmount = null;
+    _receivedPaymentUserName = null;
     notifyListeners();
   }
 
@@ -117,12 +168,28 @@ class WasteConfigurationViewModel extends ChangeNotifier {
   }
 
   void addBag(String name) {
+    _currentBillId = null;
+    _qrCodeBase64 = null;
+    _qrCodeUrl = null;
+    _razorpayOrderId = null;
+    _currentBillId = null;
+    _isPaymentSuccess = false;
+    _receivedPaymentAmount = null;
+    _receivedPaymentUserName = null;
     final currentQty = _bagQuantities[name] ?? 0;
     _bagQuantities[name] = currentQty + 1;
     notifyListeners();
   }
 
   void decreaseBag(String name) {
+    _currentBillId = null;
+    _qrCodeBase64 = null;
+    _qrCodeUrl = null;
+    _razorpayOrderId = null;
+    _currentBillId = null;
+    _isPaymentSuccess = false;
+    _receivedPaymentAmount = null;
+    _receivedPaymentUserName = null;
     final currentQty = _bagQuantities[name] ?? 0;
     if (currentQty > 1) {
       _bagQuantities[name] = currentQty - 1;
@@ -133,6 +200,14 @@ class WasteConfigurationViewModel extends ChangeNotifier {
   }
 
   void removeBag(String name) {
+    _currentBillId = null;
+    _qrCodeBase64 = null;
+    _qrCodeUrl = null;
+    _razorpayOrderId = null;
+    _currentBillId = null;
+    _isPaymentSuccess = false;
+    _receivedPaymentAmount = null;
+    _receivedPaymentUserName = null;
     _bagQuantities.remove(name);
     notifyListeners();
   }
@@ -142,20 +217,71 @@ class WasteConfigurationViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> fetchQrCode(int pickupId) async {
+  Future<void> fetchQrCode(
+    int pickupId, {
+    String? localBody,
+    String? ward,
+    String? userName,
+    int? collectorId,
+  }) async {
     _isLoadingQr = true;
     notifyListeners();
     try {
+      final effectiveCollectorId =
+          collectorId ?? _apiClient.currentCollector?.id;
+      final effectiveLocalBody =
+          localBody ?? _currentOrder?.localBody ?? _currentOrder?.ward;
+      final effectiveWard = ward ?? _currentOrder?.ward;
+      final effectiveUserName = userName ?? _currentOrder?.name;
+
+      // 1. Bill MUST exist BEFORE payment so the backend webhook can find it
+      if (_currentBillId == null) {
+        try {
+          debugPrint(
+              '[WasteConfig] Generating pending bill before QR creation for pickup: $pickupId, collector: $effectiveCollectorId');
+          final billRes = await _apiClient.generateBill(
+            pickupId: pickupId,
+            weight: enteredWeight,
+            rate: ratePerKg,
+            totalAmount: finalTotal,
+            paymentMethod: 'online',
+            localBody: effectiveLocalBody,
+            ward: effectiveWard,
+            userName: effectiveUserName,
+            collectorId: effectiveCollectorId,
+            status: 'pending',
+          );
+          if (billRes is Map) {
+            _currentBillId = billRes['bill_id'] ??
+                billRes['id'] ??
+                billRes['bill']?['id'] ??
+                billRes['data']?['id'] ??
+                billRes['bill_no'];
+          }
+          debugPrint(
+              '[WasteConfig] Pending bill successfully created: bill_id=$_currentBillId');
+        } catch (billErr) {
+          debugPrint('[WasteConfig] Error creating pending bill: $billErr');
+        }
+      }
+
+      // 2. Generate Razorpay QR code / order with bill_id and collector_id in body and notes
       final res = await _apiClient.generateRazorpayQr(
         amount: finalTotal,
         pickupId: pickupId,
+        billId: _currentBillId,
+        collectorId: effectiveCollectorId,
       );
       if (res is Map) {
-        _qrCodeBase64 = res['qr_code']?.toString() ?? res['qr_image']?.toString();
+        _qrCodeBase64 =
+            res['qr_code']?.toString() ?? res['qr_image']?.toString();
         _qrCodeUrl =
             res['qr_code_url']?.toString() ?? res['image_url']?.toString();
         _razorpayOrderId =
             res['order_id']?.toString() ?? res['qr_id']?.toString();
+        if (_currentBillId == null && res['bill_id'] != null) {
+          _currentBillId = res['bill_id'];
+        }
       }
     } catch (e) {
       debugPrint('[WasteConfig] QR Code fetch error: $e');
@@ -171,26 +297,51 @@ class WasteConfigurationViewModel extends ChangeNotifier {
     String? localBody,
     String? ward,
     String? userName,
+    int? collectorId,
   }) async {
     _isProcessingPayment = true;
     notifyListeners();
     try {
+      final effectiveCollectorId =
+          collectorId ?? _apiClient.currentCollector?.id;
+
       if (_paymentMode == 'online' && _razorpayOrderId != null) {
-        await _apiClient.verifyRazorpayPayment(
-          orderId: _razorpayOrderId!,
-          pickupId: pickupId,
-        );
+        try {
+          await _apiClient.verifyRazorpayPayment(
+            orderId: _razorpayOrderId!,
+            pickupId: pickupId,
+          );
+        } catch (verifyErr) {
+          debugPrint(
+              '[WasteConfig] verifyRazorpayPayment non-fatal: $verifyErr');
+        }
       }
-      await _apiClient.generateBill(
-        pickupId: pickupId,
-        weight: enteredWeight,
-        rate: ratePerKg,
-        totalAmount: finalTotal,
-        paymentMethod: paymentMode,
-        localBody: localBody ?? ward,
-        ward: ward,
-        userName: userName,
-      );
+
+      // Finalize or generate bill if cash or if pending bill not created yet
+      if (_currentBillId == null || _paymentMode == 'cash') {
+        final billRes = await _apiClient.generateBill(
+          pickupId: pickupId,
+          weight: enteredWeight,
+          rate: ratePerKg,
+          totalAmount: finalTotal,
+          paymentMethod: paymentMode,
+          localBody: localBody ?? ward,
+          ward: ward,
+          userName: userName,
+          collectorId: effectiveCollectorId,
+          status: 'paid',
+          extraData:
+              _currentBillId != null ? {'bill_id': _currentBillId} : null,
+        );
+        if (billRes is Map && _currentBillId == null) {
+          _currentBillId = billRes['bill_id'] ??
+              billRes['id'] ??
+              billRes['bill']?['id'] ??
+              billRes['data']?['id'] ??
+              billRes['bill_no'];
+        }
+      }
+
       await _apiClient.updatePickupStatus(
         pickupId: pickupId,
         locationId: locationId,
@@ -250,13 +401,20 @@ class WasteConfigurationViewModel extends ChangeNotifier {
     String? selectedLocalBodyName,
   }) async {
     _isLoading = true;
+    _currentOrder = order;
     _enteredWeight = 0.0;
     _bagQuantities.clear();
     _selectedWasteTypes.clear();
+    _walletBalance = order.walletBalance ?? 0.0;
     _redeemWallet = false;
+    _paymentMode = 'online';
     _qrCodeBase64 = null;
     _qrCodeUrl = null;
     _razorpayOrderId = null;
+    _currentBillId = null;
+    _isPaymentSuccess = false;
+    _receivedPaymentAmount = null;
+    _receivedPaymentUserName = null;
     notifyListeners();
 
     try {
@@ -327,7 +485,7 @@ class WasteConfigurationViewModel extends ChangeNotifier {
               savedLocalBodyName.trim(),
             if (order.ward != null && order.ward!.trim().isNotEmpty)
               order.ward!.trim(),
-            'Alangad Panchayat',
+            '',
           ];
 
           for (final candidate in candidateNames) {

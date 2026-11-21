@@ -357,7 +357,7 @@ class _AdminCollectorsTabState extends State<AdminCollectorsTab> {
                                 ),
                                 SizedBox(height: 3.spMin),
                                 Text(
-                                  "${item.quantityKg.toStringAsFixed(1)} Kg",
+                                  "${item.quantityKg % 1 == 0 ? item.quantityKg.toInt() : item.quantityKg.toStringAsFixed(1)} Kg",
                                   style: TextStyle(
                                     fontSize: 14.5.spMin,
                                     fontWeight: FontWeight.w800,

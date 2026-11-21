@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'package:intl/intl.dart';
 import 'package:suchigo_collector/features/home/view/home_screen.dart';
 import 'package:suchigo_collector/features/orders/view/navigation_screen.dart';
 import 'package:suchigo_collector/features/orders/view/waste_configuration_screen.dart';
@@ -27,27 +28,40 @@ class UpdateStatusScreen extends StatefulWidget {
 class _UpdateStatusScreenState extends State<UpdateStatusScreen> {
   final ApiClient _apiClient = ApiClient();
 
-  bool _isPending(String status) => status.toLowerCase() == 'pending';
   bool _isAccepted(String status) => status.toLowerCase() == 'accepted';
-  bool _isTravellingOrBeyond(String status) {
+  bool _isTravelling(String status) {
     final s = status.toLowerCase();
-    return s == 'travelling' ||
-        s == 'in_transit' ||
-        s == 'reached' ||
-        s == 'arrived' ||
-        s == 'completed';
+    return s == 'travelling' || s == 'in_transit';
+  }
+
+  bool _isReachedOrBeyond(String status) {
+    final s = status.toLowerCase();
+    return s == 'reached' || s == 'arrived' || s == 'completed';
+  }
+
+  bool _isTravellingOrBeyond(String status) =>
+      _isTravelling(status) || _isReachedOrBeyond(status);
+
+  bool _isRescheduled(String status) {
+    final s = status.toLowerCase().trim();
+    return s == 'rescheduled' || s == 'reschedule';
+  }
+
+  bool _isPending(String status) {
+    final s = status.toLowerCase().trim();
+    return s == 'pending' ||
+        (!_isAccepted(s) &&
+            !_isTravellingOrBeyond(s) &&
+            !_isRescheduled(s) &&
+            s != 'cancelled');
   }
 
   int _currentStepIndex(String status) {
-    final s = status.toLowerCase();
-    if (s == 'travelling' ||
-        s == 'in_transit' ||
-        s == 'reached' ||
-        s == 'arrived' ||
-        s == 'completed') {
+    final s = status.toLowerCase().trim();
+    if (s == 'completed' || s == 'reached' || s == 'arrived') {
       return 2;
     }
-    if (s == 'accepted') {
+    if (s == 'travelling' || s == 'in_transit' || s == 'accepted') {
       return 1;
     }
     return 0;
@@ -64,10 +78,10 @@ class _UpdateStatusScreenState extends State<UpdateStatusScreen> {
   Future<void> _updateStatus(String newStatus) async {
     final effectivePickupId = widget.order.pickupId ?? widget.order.id;
     await context.read<OrderViewModel>().updatePickupStatus(
-      pickupId: effectivePickupId,
-      locationId: widget.order.id,
-      status: newStatus,
-    );
+          pickupId: effectivePickupId,
+          locationId: widget.order.id,
+          status: newStatus,
+        );
 
     if (!mounted) return;
 
@@ -98,10 +112,10 @@ class _UpdateStatusScreenState extends State<UpdateStatusScreen> {
   Future<void> _handleStartNavigation() async {
     final effectivePickupId = widget.order.pickupId ?? widget.order.id;
     await context.read<OrderViewModel>().updatePickupStatus(
-      pickupId: effectivePickupId,
-      locationId: widget.order.id,
-      status: 'travelling',
-    );
+          pickupId: effectivePickupId,
+          locationId: widget.order.id,
+          status: 'travelling',
+        );
 
     if (!mounted) return;
 
@@ -131,9 +145,79 @@ class _UpdateStatusScreenState extends State<UpdateStatusScreen> {
     return parts.join(", ");
   }
 
+  String _formatDisplayDate(String rawDate) {
+    if (widget.order.pickupDateDisplay != null &&
+        widget.order.pickupDateDisplay!.trim().isNotEmpty) {
+      return widget.order.pickupDateDisplay!.trim();
+    }
+    final trimmed = rawDate.trim();
+    try {
+      final parsed = DateTime.tryParse(trimmed);
+      if (parsed != null) {
+        final day = widget.order.dayOfWeek?.trim().isNotEmpty == true
+            ? widget.order.dayOfWeek!.trim()
+            : DateFormat('EEEE').format(parsed);
+        return "$day, ${DateFormat('dd MMM yyyy').format(parsed)}";
+      }
+    } catch (_) {}
+    return trimmed;
+  }
+
   void _showRescheduleBottomSheet() {
-    DateTime selectedDate = DateTime.now().add(const Duration(days: 1));
+    DateTime initialDate;
+    if (widget.order.pickupDate != null &&
+        widget.order.pickupDate!.trim().isNotEmpty) {
+      final parsed = DateTime.tryParse(widget.order.pickupDate!.trim());
+      if (parsed != null) {
+        initialDate = parsed;
+      } else {
+        initialDate = DateTime.now().add(const Duration(days: 1));
+      }
+    } else {
+      initialDate = DateTime.now().add(const Duration(days: 1));
+    }
+
+    final firstDate = DateTime(2020, 1, 1);
+    final lastDate = DateTime(2035, 12, 31);
+
+    int targetWeekday = DateTime.friday;
+    final dow = (widget.order.dayOfWeek ??
+            widget.order.pickupDay ??
+            widget.order.pickupDateDisplay ??
+            '')
+        .trim()
+        .toLowerCase();
+    if (dow.contains('mon')) {
+      targetWeekday = DateTime.monday;
+    } else if (dow.contains('tue')) {
+      targetWeekday = DateTime.tuesday;
+    } else if (dow.contains('wed')) {
+      targetWeekday = DateTime.wednesday;
+    } else if (dow.contains('thu')) {
+      targetWeekday = DateTime.thursday;
+    } else if (dow.contains('fri')) {
+      targetWeekday = DateTime.friday;
+    } else if (dow.contains('sat')) {
+      targetWeekday = DateTime.saturday;
+    } else if (dow.contains('sun')) {
+      targetWeekday = DateTime.sunday;
+    } else {
+      targetWeekday = initialDate.weekday;
+    }
+
+    // Ensure initialDate matches the given day from API
+    if (initialDate.weekday != targetWeekday) {
+      final diff = (targetWeekday - initialDate.weekday + 7) % 7;
+      initialDate = initialDate.add(Duration(days: diff == 0 ? 7 : diff));
+    }
+
+    DateTime selectedDate = initialDate;
     bool isSubmitting = false;
+
+    // Enable ONLY the given day of the week (e.g. Friday only) in calendar
+    bool isDaySelectable(DateTime date) {
+      return date.weekday == targetWeekday;
+    }
 
     showModalBottomSheet(
       context: context,
@@ -145,178 +229,221 @@ class _UpdateStatusScreenState extends State<UpdateStatusScreen> {
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setModalState) {
+            final dayOfWeekStr = (selectedDate.year == initialDate.year &&
+                    selectedDate.month == initialDate.month &&
+                    selectedDate.day == initialDate.day &&
+                    widget.order.dayOfWeek?.trim().isNotEmpty == true)
+                ? widget.order.dayOfWeek!.trim()
+                : DateFormat('EEEE').format(selectedDate);
+
             final formattedDate =
-                "${selectedDate.day}/${selectedDate.month}/${selectedDate.year}";
+                DateFormat('dd MMM yyyy').format(selectedDate);
+            final rawApiDateStr =
+                "${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}";
 
-            return Padding(
-              padding: EdgeInsets.only(
-                left: 20.spMin,
-                right: 20.spMin,
-                top: 24.spMin,
-                bottom: MediaQuery.of(context).viewInsets.bottom + 24.spMin,
+            return ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.88,
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    "Reschedule Collection",
-                    style: TextStyle(
-                      fontSize: 19.spMin,
-                      fontWeight: FontWeight.w800,
-                      color: const Color(0xFF135C30),
-                      letterSpacing: -0.2.spMin,
-                    ),
-                  ),
-                  SizedBox(height: 12.spMin),
-                  Text(
-                    "Select a new collection date for this order:",
-                    style: TextStyle(
-                      fontSize: 14.spMin,
-                      color: const Color(0xFF757575),
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  SizedBox(height: 18.spMin),
-                  GestureDetector(
-                    onTap: () async {
-                      final picked = await showDatePicker(
-                        context: context,
-                        initialDate: selectedDate,
-                        firstDate: DateTime.now(),
-                        lastDate:
-                            DateTime.now().add(const Duration(days: 365)),
-                        builder: (context, child) {
-                          return Theme(
-                            data: Theme.of(context).copyWith(
-                              colorScheme: const ColorScheme.light(
-                                primary: Color(0xFF1D723C),
-                                onPrimary: Colors.white,
-                                onSurface: Color(0xFF1A1A1A),
-                              ),
-                            ),
-                            child: child!,
-                          );
-                        },
-                      );
-                      if (picked != null) {
-                        setModalState(() {
-                          selectedDate = picked;
-                        });
-                      }
-                    },
-                    child: Container(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: 16.spMin,
-                        vertical: 14.spMin,
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                padding: EdgeInsets.only(
+                  left: 20.spMin,
+                  right: 20.spMin,
+                  top: 14.spMin,
+                  bottom: MediaQuery.of(context).viewInsets.bottom + 20.spMin,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Top drag pill
+                    Center(
+                      child: Container(
+                        width: 44.spMin,
+                        height: 4.5.spMin,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE0E0E0),
+                          borderRadius: BorderRadius.circular(2.5.spMin),
+                        ),
                       ),
+                    ),
+                    SizedBox(height: 14.spMin),
+
+                    // Header Row: Icon + Title + Close Button
+                    Row(
+                      children: [
+                        Container(
+                          padding: EdgeInsets.all(8.spMin),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE8F5E9),
+                            borderRadius: BorderRadius.circular(10.spMin),
+                          ),
+                          child: Icon(
+                            Icons.event_repeat_rounded,
+                            color: const Color(0xFF1D723C),
+                            size: 20.spMin,
+                          ),
+                        ),
+                        SizedBox(width: 10.spMin),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "Reschedule Collection",
+                                style: TextStyle(
+                                  fontSize: 18.spMin,
+                                  fontWeight: FontWeight.w800,
+                                  color: const Color(0xFF135C30),
+                                  letterSpacing: -0.2.spMin,
+                                ),
+                              ),
+                              SizedBox(height: 2.spMin),
+                              Text(
+                                "Select a new collection date for this order",
+                                style: TextStyle(
+                                  fontSize: 12.5.spMin,
+                                  color: const Color(0xFF757575),
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () => Navigator.pop(context),
+                          child: Container(
+                            padding: EdgeInsets.all(4.spMin),
+                            child: Icon(
+                              Icons.close_rounded,
+                              size: 22.spMin,
+                              color: const Color(0xFF9E9E9E),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    SizedBox(height: 14.spMin),
+
+                    // Informative note about enabled collection day
+
+                    // Interactive Calendar Picker
+                    Container(
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF7FCF7),
-                        borderRadius: BorderRadius.circular(16.spMin),
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(18.spMin),
                         border: Border.all(
-                          color: const Color(0xFFD7EED7),
-                          width: 1.2.spMin,
+                          color: const Color(0xFFE8F5E9),
+                          width: 1.spMin,
                         ),
                       ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.calendar_today_outlined,
-                            color: const Color(0xFF1D723C),
-                            size: 22.spMin,
+                      child: Theme(
+                        data: Theme.of(context).copyWith(
+                          colorScheme: const ColorScheme.light(
+                            primary: Color(0xFF1D723C),
+                            onPrimary: Colors.white,
+                            surface: Colors.white,
+                            onSurface: Color(0xFF1A1A1A),
                           ),
-                          SizedBox(width: 14.spMin),
-                          Text(
-                            formattedDate,
-                            style: TextStyle(
-                              fontSize: 16.spMin,
-                              fontWeight: FontWeight.w800,
-                              color: const Color(0xFF1A1A1A),
-                            ),
-                          ),
-                          const Spacer(),
-                          Icon(
-                            Icons.edit_calendar_rounded,
-                            color: const Color(0xFF1D723C),
-                            size: 24.spMin,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  SizedBox(height: 22.spMin),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 52.spMin,
-                    child: ElevatedButton(
-                      onPressed: isSubmitting
-                          ? null
-                          : () async {
-                              setModalState(() {
-                                isSubmitting = true;
-                              });
-
-                              try {
-                                final effectivePickupId =
-                                    widget.order.pickupId ?? widget.order.id;
-                                await _apiClient.reschedulePickup(
-                                  pickupId: effectivePickupId,
-                                  newDate:
-                                      "${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}",
-                                  locationId: widget.order.id,
-                                );
-                                await _apiClient.updatePickupStatus(
-                                  pickupId: effectivePickupId,
-                                  locationId: widget.order.id,
-                                  status: 'rescheduled',
-                                );
-                              } catch (_) {}
-
-                              if (!context.mounted) return;
-                              Navigator.pop(context);
-
-                              Fluttertoast.showToast(
-                                msg: "Collection rescheduled to $formattedDate",
-                                toastLength: Toast.LENGTH_SHORT,
-                                gravity: ToastGravity.BOTTOM,
-                                backgroundColor: const Color(0xFF1D723C),
-                                textColor: Colors.white,
-                              );
-
-                              Navigator.pushNamedAndRemoveUntil(
-                                context,
-                                HomeScreen.routeName,
-                                (route) => false,
-                              );
-                            },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF1D723C),
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14.spMin),
+                        ),
+                        child: CalendarDatePicker(
+                          initialDate: selectedDate,
+                          firstDate: firstDate,
+                          lastDate: lastDate,
+                          currentDate: DateTime.now(),
+                          selectableDayPredicate: isDaySelectable,
+                          onDateChanged: (newDate) {
+                            setModalState(() {
+                              selectedDate = newDate;
+                            });
+                          },
                         ),
                       ),
-                      child: isSubmitting
-                          ? SizedBox(
-                              width: 22.spMin,
-                              height: 22.spMin,
-                              child: const CircularProgressIndicator(
-                                strokeWidth: 2.5,
-                                color: Colors.white,
-                              ),
-                            )
-                          : Text(
-                              "Confirm Reschedule",
-                              style: TextStyle(
-                                fontSize: 16.spMin,
-                                fontWeight: FontWeight.w800,
-                                color: Colors.white,
-                              ),
-                            ),
                     ),
-                  ),
-                ],
+
+                    SizedBox(height: 18.spMin),
+
+                    // Confirm Reschedule Button
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50.spMin,
+                      child: ElevatedButton(
+                        onPressed: isSubmitting
+                            ? null
+                            : () async {
+                                setModalState(() {
+                                  isSubmitting = true;
+                                });
+
+                                try {
+                                  final effectivePickupId =
+                                      widget.order.pickupId ?? widget.order.id;
+                                  await _apiClient.reschedulePickup(
+                                    pickupId: effectivePickupId,
+                                    newDate: rawApiDateStr,
+                                    locationId: widget.order.id,
+                                  );
+                                  await _apiClient.updatePickupStatus(
+                                    pickupId: effectivePickupId,
+                                    locationId: widget.order.id,
+                                    status: 'rescheduled',
+                                  );
+                                  if (context.mounted) {
+                                    context
+                                        .read<OrderViewModel>()
+                                        .setLocalStatus(
+                                            widget.order.id, 'rescheduled');
+                                  }
+                                } catch (_) {}
+
+                                if (!context.mounted) return;
+                                Navigator.pop(context);
+
+                                Fluttertoast.showToast(
+                                  msg:
+                                      "Rescheduled to $dayOfWeekStr, $formattedDate",
+                                  toastLength: Toast.LENGTH_SHORT,
+                                  gravity: ToastGravity.BOTTOM,
+                                  backgroundColor: const Color(0xFF1D723C),
+                                  textColor: Colors.white,
+                                );
+
+                                Navigator.pushNamedAndRemoveUntil(
+                                  context,
+                                  HomeScreen.routeName,
+                                  (route) => false,
+                                );
+                              },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF1D723C),
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14.spMin),
+                          ),
+                        ),
+                        child: isSubmitting
+                            ? SizedBox(
+                                width: 22.spMin,
+                                height: 22.spMin,
+                                child: const CircularProgressIndicator(
+                                  strokeWidth: 2.5,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : Text(
+                                "Confirm Reschedule",
+                                style: TextStyle(
+                                  fontSize: 15.5.spMin,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             );
           },
@@ -565,9 +692,13 @@ class _UpdateStatusScreenState extends State<UpdateStatusScreen> {
     final orderVm = context.watch<OrderViewModel>();
     final currentStatus = orderVm.getOrderStatus(order);
     final isUpdating = orderVm.isOrderUpdating(order.id);
+    final isRescheduled = _isRescheduled(currentStatus);
     final isPending = _isPending(currentStatus);
     final isAccepted = _isAccepted(currentStatus);
+    final isTravelling = _isTravelling(currentStatus);
+    final isReachedOrBeyond = _isReachedOrBeyond(currentStatus);
     final isTravellingOrBeyond = _isTravellingOrBeyond(currentStatus);
+    final isCompleted = currentStatus.toLowerCase().trim() == 'completed';
     final currentStepIndex = _currentStepIndex(currentStatus);
     final fullAddress = _formatAddress(order);
     final itemsDesc = order.itemsDescription?.isNotEmpty == true
@@ -661,12 +792,22 @@ class _UpdateStatusScreenState extends State<UpdateStatusScreen> {
                             children: [
                               _buildStepItem(
                                 stepIndex: 0,
-                                icon: Icons.schedule_rounded,
-                                label: "Pending",
+                                icon: isRescheduled
+                                    ? Icons.event_repeat_rounded
+                                    : Icons.schedule_rounded,
+                                label:
+                                    isRescheduled ? "Rescheduled" : "Pending",
                                 isCurrent: currentStepIndex == 0,
                                 isCompleted: currentStepIndex >= 0,
+                                customColor: isRescheduled
+                                    ? const Color(0xFFE65100)
+                                    : null,
+                                customBgColor: isRescheduled
+                                    ? const Color(0xFFFFF3E0)
+                                    : null,
                               ),
-                              _buildStepConnector(isCompleted: currentStepIndex >= 1),
+                              _buildStepConnector(
+                                  isCompleted: currentStepIndex >= 1),
                               _buildStepItem(
                                 stepIndex: 1,
                                 icon: Icons.directions_walk_rounded,
@@ -674,7 +815,8 @@ class _UpdateStatusScreenState extends State<UpdateStatusScreen> {
                                 isCurrent: currentStepIndex == 1,
                                 isCompleted: currentStepIndex >= 1,
                               ),
-                              _buildStepConnector(isCompleted: currentStepIndex >= 2),
+                              _buildStepConnector(
+                                  isCompleted: currentStepIndex >= 2),
                               _buildStepItem(
                                 stepIndex: 2,
                                 icon: Icons.location_on_rounded,
@@ -688,41 +830,83 @@ class _UpdateStatusScreenState extends State<UpdateStatusScreen> {
 
                         SizedBox(height: 14.spMin),
 
-                        // Start Navigation Button
-                        SizedBox(
-                          width: double.infinity,
-                          height: 48.spMin,
-                          child: ElevatedButton(
-                            onPressed: _handleStartNavigation,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF1D723C),
-                              foregroundColor: Colors.white,
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14.spMin),
-                              ),
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.explore_outlined,
-                                  color: Colors.white,
-                                  size: 20.spMin,
-                                ),
-                                SizedBox(width: 8.spMin),
-                                Text(
-                                  "Start Navigation",
-                                  style: TextStyle(
-                                    fontSize: 15.spMin,
-                                    fontWeight: FontWeight.w800,
-                                    color: Colors.white,
-                                    letterSpacing: 0.2.spMin,
+                        // Start Navigation Button (Enabled ONLY when status is 'accepted' or 'travelling' and not completed)
+                        Builder(
+                          builder: (context) {
+                            final bool isAcceptOrTravelling =
+                                (isAccepted || isTravelling) && !isCompleted;
+                            final bool isNavigationEnabled =
+                                isAcceptOrTravelling && !isUpdating;
+
+                            return SizedBox(
+                              width: double.infinity,
+                              height: 48.spMin,
+                              child: ElevatedButton(
+                                onPressed: isUpdating
+                                    ? null
+                                    : (isNavigationEnabled
+                                        ? _handleStartNavigation
+                                        : () {
+                                            final msg = isCompleted
+                                                ? "Order is already completed"
+                                                : (isRescheduled
+                                                    ? "Order is rescheduled. Please accept to start navigation"
+                                                    : (isPending
+                                                        ? "Please accept the order to start navigation"
+                                                        : "Navigation is disabled (destination already reached)"));
+                                            Fluttertoast.showToast(
+                                              msg: msg,
+                                              toastLength: Toast.LENGTH_SHORT,
+                                              gravity: ToastGravity.BOTTOM,
+                                              backgroundColor:
+                                                  const Color(0xFF424242),
+                                              textColor: Colors.white,
+                                            );
+                                          }),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: isNavigationEnabled
+                                      ? const Color(0xFF1D723C)
+                                      : const Color(0xFFE0E0E0),
+                                  foregroundColor: isNavigationEnabled
+                                      ? Colors.white
+                                      : const Color(0xFF9E9E9E),
+                                  disabledBackgroundColor:
+                                      const Color(0xFFE0E0E0),
+                                  disabledForegroundColor:
+                                      const Color(0xFF9E9E9E),
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius:
+                                        BorderRadius.circular(14.spMin),
                                   ),
                                 ),
-                              ],
-                            ),
-                          ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.explore_outlined,
+                                      color: isNavigationEnabled
+                                          ? Colors.white
+                                          : const Color(0xFF9E9E9E),
+                                      size: 20.spMin,
+                                    ),
+                                    SizedBox(width: 8.spMin),
+                                    Text(
+                                      "Start Navigation",
+                                      style: TextStyle(
+                                        fontSize: 15.spMin,
+                                        fontWeight: FontWeight.w800,
+                                        color: isNavigationEnabled
+                                            ? Colors.white
+                                            : const Color(0xFF9E9E9E),
+                                        letterSpacing: 0.2.spMin,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
                         ),
 
                         SizedBox(height: 14.spMin),
@@ -779,24 +963,35 @@ class _UpdateStatusScreenState extends State<UpdateStatusScreen> {
                                       vertical: 5.spMin,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: isAccepted
-                                          ? const Color(0xFFE3F2FD)
-                                          : const Color(0xFFFFF3E0),
+                                      color: isRescheduled
+                                          ? const Color(0xFFFFF3E0)
+                                          : (isAccepted
+                                              ? const Color(0xFFE3F2FD)
+                                              : (isPending
+                                                  ? const Color(0xFFFFF8E1)
+                                                  : const Color(0xFFE8F5E9))),
                                       borderRadius:
                                           BorderRadius.circular(12.spMin),
                                     ),
                                     child: Text(
-                                      isPending
-                                          ? "Pending"
-                                          : (isAccepted
-                                              ? "Accepted"
-                                              : currentStatus.toUpperCase()),
+                                      isRescheduled
+                                          ? "Rescheduled"
+                                          : (isPending
+                                              ? "Pending"
+                                              : (isAccepted
+                                                  ? "Accepted"
+                                                  : currentStatus
+                                                      .toUpperCase())),
                                       style: TextStyle(
                                         fontSize: 11.5.spMin,
                                         fontWeight: FontWeight.w800,
-                                        color: isAccepted
-                                            ? const Color(0xFF1976D2)
-                                            : const Color(0xFFFB8C00),
+                                        color: isRescheduled
+                                            ? const Color(0xFFE65100)
+                                            : (isAccepted
+                                                ? const Color(0xFF1976D2)
+                                                : (isPending
+                                                    ? const Color(0xFFFB8C00)
+                                                    : const Color(0xFF1D723C))),
                                       ),
                                     ),
                                   ),
@@ -831,8 +1026,10 @@ class _UpdateStatusScreenState extends State<UpdateStatusScreen> {
                               _buildInfoRow(
                                 icon: Icons.tag_rounded,
                                 label: "LANDMARK / WARD",
-                                value: WardModel.formatWardName(
-                                    order.ward ?? "Neericode West"),
+                                value: (order.ward != null &&
+                                        order.ward!.trim().isNotEmpty)
+                                    ? WardModel.formatWardName(order.ward!)
+                                    : "",
                               ),
                               SizedBox(height: 16.spMin),
 
@@ -848,8 +1045,21 @@ class _UpdateStatusScreenState extends State<UpdateStatusScreen> {
                               _buildInfoRow(
                                 icon: Icons.phone_android_rounded,
                                 label: "PHONE NUMBER",
-                                value: order.contactNumber ?? "+917592964952",
+                                value: order.contactNumber ?? "",
                               ),
+                              if (order.pickupDate != null &&
+                                  order.pickupDate!.trim().isNotEmpty) ...[
+                                SizedBox(height: 16.spMin),
+                                _buildInfoRow(
+                                  icon: isRescheduled
+                                      ? Icons.event_repeat_rounded
+                                      : Icons.calendar_today_rounded,
+                                  label: isRescheduled
+                                      ? "RESCHEDULED DATE"
+                                      : "PICKUP DATE",
+                                  value: _formatDisplayDate(order.pickupDate!),
+                                ),
+                              ],
                             ],
                           ),
                         ),
@@ -862,8 +1072,7 @@ class _UpdateStatusScreenState extends State<UpdateStatusScreen> {
                             // WhatsApp Button
                             Expanded(
                               child: GestureDetector(
-                                onTap: () =>
-                                    _openWhatsApp(order.contactNumber),
+                                onTap: () => _openWhatsApp(order.contactNumber),
                                 child: Container(
                                   height: 48.spMin,
                                   decoration: BoxDecoration(
@@ -876,8 +1085,7 @@ class _UpdateStatusScreenState extends State<UpdateStatusScreen> {
                                     ),
                                   ),
                                   child: Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.center,
+                                    mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
                                       Icon(
                                         Icons.chat_bubble_rounded,
@@ -918,8 +1126,7 @@ class _UpdateStatusScreenState extends State<UpdateStatusScreen> {
                                     ),
                                   ),
                                   child: Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.center,
+                                    mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
                                       Icon(
                                         Icons.phone_rounded,
@@ -953,10 +1160,10 @@ class _UpdateStatusScreenState extends State<UpdateStatusScreen> {
                           width: double.infinity,
                           height: 50.spMin,
                           child: ElevatedButton(
-                            onPressed: isUpdating
+                            onPressed: isUpdating || isCompleted
                                 ? null
                                 : () {
-                                    if (isPending) {
+                                    if (isPending || isRescheduled) {
                                       _updateStatus("accepted");
                                     } else if (isAccepted) {
                                       _updateStatus("travelling");
@@ -969,13 +1176,21 @@ class _UpdateStatusScreenState extends State<UpdateStatusScreen> {
                                     }
                                   },
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: isAccepted
-                                  ? const Color(0xFFEF6C00) // Orange for Start Travelling
-                                  : const Color(0xFF1565C0), // Blue for Accept Order
+                              backgroundColor: isCompleted
+                                  ? const Color(0xFF1D723C)
+                                  : (isAccepted
+                                      ? const Color(
+                                          0xFFEF6C00) // Orange for Start Travelling
+                                      : (isTravellingOrBeyond
+                                          ? const Color(0xFF1D723C)
+                                          : const Color(
+                                              0xFF1565C0))), // Blue for Accept Order
                               foregroundColor: Colors.white,
-                              disabledBackgroundColor: isAccepted
-                                  ? const Color(0xFFFFCC80)
-                                  : const Color(0xFF90CAF9),
+                              disabledBackgroundColor: isCompleted
+                                  ? const Color(0xFF81C784)
+                                  : (isAccepted
+                                      ? const Color(0xFFFFCC80)
+                                      : const Color(0xFF90CAF9)),
                               elevation: 0,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(14.spMin),
@@ -985,9 +1200,14 @@ class _UpdateStatusScreenState extends State<UpdateStatusScreen> {
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Icon(
-                                  isAccepted
-                                      ? Icons.directions_run_rounded
-                                      : Icons.assignment_turned_in_outlined,
+                                  isCompleted
+                                      ? Icons.check_circle_rounded
+                                      : (isAccepted
+                                          ? Icons.directions_run_rounded
+                                          : (isTravellingOrBeyond
+                                              ? Icons.delete_outline_rounded
+                                              : Icons
+                                                  .assignment_turned_in_outlined)),
                                   color: Colors.white,
                                   size: 20.spMin,
                                 ),
@@ -995,11 +1215,13 @@ class _UpdateStatusScreenState extends State<UpdateStatusScreen> {
                                 Text(
                                   isUpdating
                                       ? "Updating..."
-                                      : (isAccepted
-                                          ? "Start Travelling"
-                                          : (isTravellingOrBeyond
-                                              ? "Waste Configuration"
-                                              : "Accept Order")),
+                                      : (isCompleted
+                                          ? "Order Completed"
+                                          : (isAccepted
+                                              ? "Start Travelling"
+                                              : (isTravellingOrBeyond
+                                                  ? "Waste Configuration"
+                                                  : "Accept Order"))),
                                   style: TextStyle(
                                     fontSize: 15.spMin,
                                     fontWeight: FontWeight.w800,
@@ -1011,56 +1233,58 @@ class _UpdateStatusScreenState extends State<UpdateStatusScreen> {
                           ),
                         ),
 
-                        SizedBox(height: 14.spMin),
+                        if (!isCompleted) ...[
+                          SizedBox(height: 14.spMin),
 
-                        // Reschedule & Cancel Row
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceAround,
-                          children: [
-                            GestureDetector(
-                              onTap: _showRescheduleBottomSheet,
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    Icons.calendar_today_rounded,
-                                    color: const Color(0xFFFFA000),
-                                    size: 16.spMin,
-                                  ),
-                                  SizedBox(width: 6.spMin),
-                                  Text(
-                                    "Reschedule",
-                                    style: TextStyle(
-                                      fontSize: 14.spMin,
-                                      fontWeight: FontWeight.w700,
+                          // Reschedule & Cancel Row
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceAround,
+                            children: [
+                              GestureDetector(
+                                onTap: _showRescheduleBottomSheet,
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.calendar_today_rounded,
                                       color: const Color(0xFFFFA000),
+                                      size: 16.spMin,
                                     ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            GestureDetector(
-                              onTap: _showCancelBottomSheet,
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    Icons.cancel_outlined,
-                                    color: const Color(0xFFE53935),
-                                    size: 17.spMin,
-                                  ),
-                                  SizedBox(width: 6.spMin),
-                                  Text(
-                                    "Cancel",
-                                    style: TextStyle(
-                                      fontSize: 14.spMin,
-                                      fontWeight: FontWeight.w700,
-                                      color: const Color(0xFFE53935),
+                                    SizedBox(width: 6.spMin),
+                                    Text(
+                                      "Reschedule",
+                                      style: TextStyle(
+                                        fontSize: 14.spMin,
+                                        fontWeight: FontWeight.w700,
+                                        color: const Color(0xFFFFA000),
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
+                              // GestureDetector(
+                              //   onTap: _showCancelBottomSheet,
+                              //   child: Row(
+                              //     children: [
+                              //       Icon(
+                              //         Icons.cancel_outlined,
+                              //         color: const Color(0xFFE53935),
+                              //         size: 17.spMin,
+                              //       ),
+                              //       SizedBox(width: 6.spMin),
+                              //       Text(
+                              //         "Cancel",
+                              //         style: TextStyle(
+                              //           fontSize: 14.spMin,
+                              //           fontWeight: FontWeight.w700,
+                              //           color: const Color(0xFFE53935),
+                              //         ),
+                              //       ),
+                              //     ],
+                              //   ),
+                              // ),
+                            ],
+                          ),
+                        ],
 
                         SizedBox(height: 20.spMin),
                       ],
@@ -1125,13 +1349,15 @@ class _UpdateStatusScreenState extends State<UpdateStatusScreen> {
     required String label,
     required bool isCurrent,
     required bool isCompleted,
+    Color? customColor,
+    Color? customBgColor,
   }) {
-    final Color circleColor =
-        isCompleted ? const Color(0xFF1D723C) : const Color(0xFFF0F0F0);
+    final Color circleColor = customBgColor ??
+        (isCompleted ? const Color(0xFF1D723C) : const Color(0xFFF0F0F0));
     final Color iconColor =
-        isCompleted ? Colors.white : const Color(0xFF9E9E9E);
-    final Color textColor =
-        isCompleted ? const Color(0xFF1A1A1A) : const Color(0xFF9E9E9E);
+        customColor ?? (isCompleted ? Colors.white : const Color(0xFF9E9E9E));
+    final Color textColor = customColor ??
+        (isCompleted ? const Color(0xFF1A1A1A) : const Color(0xFF9E9E9E));
 
     return Column(
       children: [
@@ -1141,6 +1367,9 @@ class _UpdateStatusScreenState extends State<UpdateStatusScreen> {
           decoration: BoxDecoration(
             color: circleColor,
             shape: BoxShape.circle,
+            border: customColor != null
+                ? Border.all(color: customColor, width: 1.5.spMin)
+                : null,
           ),
           child: Icon(
             icon,

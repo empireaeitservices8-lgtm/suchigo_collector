@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:suchigo_collector/features/auth/view_model/auth_view_model.dart';
 import 'package:suchigo_collector/models/collector_model.dart';
 import 'package:suchigo_collector/services/api_client.dart';
 
@@ -12,6 +13,30 @@ class WardViewModel extends ChangeNotifier {
   String _currentCoordinates = "Fetching location...";
   String _searchQuery = "";
   String _selectedFilter = "Submit";
+
+  WardViewModel() {
+    AuthViewModel.addOnLogoutCallback(_handleLogoutCallback);
+  }
+
+  @override
+  void dispose() {
+    AuthViewModel.removeOnLogoutCallback(_handleLogoutCallback);
+    super.dispose();
+  }
+
+  Future<void> _handleLogoutCallback() async {
+    reset();
+  }
+
+  void reset() {
+    _wards = [];
+    _savedLocations = [];
+    _isLoading = true;
+    _currentCoordinates = "Fetching location...";
+    _searchQuery = "";
+    _selectedFilter = "Submit";
+    notifyListeners();
+  }
 
   List<WardModel> get wards => _wards;
   List<LocationPickupModel> get savedLocations => _savedLocations;
@@ -32,6 +57,11 @@ class WardViewModel extends ChangeNotifier {
 
   void setSearchQuery(String query) {
     _searchQuery = query;
+    notifyListeners();
+  }
+
+  void clearSearch() {
+    _searchQuery = "";
     notifyListeners();
   }
 
@@ -73,11 +103,11 @@ class WardViewModel extends ChangeNotifier {
         notifyListeners();
       }
 
-      // Fresh accurate GPS position
+      // Fresh position with balanced accuracy and quick timeout
       final position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 10),
+          accuracy: LocationAccuracy.medium,
+          timeLimit: Duration(seconds: 4),
         ),
       );
 
@@ -97,23 +127,31 @@ class WardViewModel extends ChangeNotifier {
     WardModel? selectedWard,
     String? selectedWardName,
   }) async {
+    _searchQuery = "";
     _isLoading = true;
     notifyListeners();
 
     try {
-      final fetchedLocations = await _apiClient.getLocations();
+      // Fetch locations and official wards concurrently to minimize latency
+      final results = await Future.wait([
+        _apiClient.getLocations().catchError((e) {
+          debugPrint("Failed to fetch locations: $e");
+          return <LocationPickupModel>[];
+        }),
+        _apiClient.getWards(localBodyId).catchError((e) {
+          debugPrint("Failed to fetch wards: $e");
+          return <WardModel>[];
+        }),
+      ]);
+
+      final fetchedLocations = results[0] as List<LocationPickupModel>;
+      List<WardModel> apiWards = results[1] as List<WardModel>;
 
       // Check if user explicitly selected a specific ward from the profile section
       final bool hasSelectedWard = selectedWard != null ||
           (selectedWardName != null && selectedWardName.trim().isNotEmpty);
       final targetWardName = selectedWard?.name ?? selectedWardName;
       final targetWardNumber = selectedWard?.wardNumber;
-
-      // 1. Fetch official wards from API if available
-      List<WardModel> apiWards = [];
-      try {
-        apiWards = await _apiClient.getWards(localBodyId);
-      } catch (_) {}
 
       // Fallback: extract unique wards from fetchedLocations if apiWards is empty
       if (apiWards.isEmpty && fetchedLocations.isNotEmpty) {
@@ -141,44 +179,15 @@ class WardViewModel extends ChangeNotifier {
 
       // If still empty, supply default wards
       if (apiWards.isEmpty) {
-        apiWards = [
-          WardModel(
-            id: 1,
-            name: "Neericode West",
-            wardNumber: "1",
-            localbody: localBodyId,
-          ),
-          WardModel(
-            id: 2,
-            name: "Neericode East",
-            wardNumber: "2",
-            localbody: localBodyId,
-          ),
-          WardModel(
-            id: 3,
-            name: "Panchayat Head Quarters",
-            wardNumber: "3",
-            localbody: localBodyId,
-          ),
-          WardModel(
-            id: 4,
-            name: "Koduvazhanga South",
-            wardNumber: "4",
-            localbody: localBodyId,
-          ),
-          WardModel(
-            id: 5,
-            name: "Koduvazhanga North",
-            wardNumber: "5",
-            localbody: localBodyId,
-          ),
-        ];
+        apiWards = [];
       }
 
       List<WardModel> profileWards = [];
 
       // 2. If a specific ward was selected from the profile section, show ONLY that ward
-      if (hasSelectedWard && targetWardName != null && targetWardName.trim().isNotEmpty) {
+      if (hasSelectedWard &&
+          targetWardName != null &&
+          targetWardName.trim().isNotEmpty) {
         WardModel? matchedWard;
         final targetFormatted =
             WardModel.formatWardName(targetWardName, targetWardNumber);
@@ -190,7 +199,8 @@ class WardViewModel extends ChangeNotifier {
             break;
           }
           if (w.displayName.toLowerCase() == targetFormatted.toLowerCase() ||
-              w.name.trim().toLowerCase() == targetWardName.trim().toLowerCase()) {
+              w.name.trim().toLowerCase() ==
+                  targetWardName.trim().toLowerCase()) {
             matchedWard = w;
             break;
           }
@@ -203,8 +213,10 @@ class WardViewModel extends ChangeNotifier {
                 id: selectedWard?.id ?? 1,
                 name: targetWardName.trim(),
                 wardNumber: targetWardNumber ??
-                    RegExp(r'^(\d+)\s*-').firstMatch(targetWardName)?.group(1) ??
-                    "1",
+                    RegExp(r'^(\d+)\s*-')
+                        .firstMatch(targetWardName)
+                        ?.group(1) ??
+                    "",
                 localbody: localBodyId,
               )
         ];
@@ -221,8 +233,8 @@ class WardViewModel extends ChangeNotifier {
       final bool hasSelectedWard = selectedWard != null ||
           (selectedWardName != null && selectedWardName.trim().isNotEmpty);
       if (hasSelectedWard) {
-        final targetWardName = selectedWard?.name ?? selectedWardName ?? "Ward 1";
-        final targetWardNumber = selectedWard?.wardNumber ?? "1";
+        final targetWardName = selectedWard?.name ?? selectedWardName ?? "";
+        final targetWardNumber = selectedWard?.wardNumber ?? "";
         _wards = [
           selectedWard ??
               WardModel(
@@ -233,38 +245,7 @@ class WardViewModel extends ChangeNotifier {
               )
         ];
       } else {
-        _wards = [
-          WardModel(
-            id: 1,
-            name: "Neericode West",
-            wardNumber: "1",
-            localbody: localBodyId,
-          ),
-          WardModel(
-            id: 2,
-            name: "Neericode East",
-            wardNumber: "2",
-            localbody: localBodyId,
-          ),
-          WardModel(
-            id: 3,
-            name: "Panchayat Head Quarters",
-            wardNumber: "3",
-            localbody: localBodyId,
-          ),
-          WardModel(
-            id: 4,
-            name: "Koduvazhanga South",
-            wardNumber: "4",
-            localbody: localBodyId,
-          ),
-          WardModel(
-            id: 5,
-            name: "Koduvazhanga North",
-            wardNumber: "5",
-            localbody: localBodyId,
-          ),
-        ];
+        _wards = [];
       }
       _isLoading = false;
       notifyListeners();

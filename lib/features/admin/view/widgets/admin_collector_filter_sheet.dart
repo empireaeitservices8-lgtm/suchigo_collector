@@ -173,14 +173,14 @@ class AdminCollectorFilterSheet extends StatelessWidget {
           SizedBox(height: 18.spMin),
 
           // 6. Ward Area
-          Text(
-            "Ward Area",
-            style: TextStyle(
-              fontSize: 14.spMin,
-              fontWeight: FontWeight.w800,
-              color: const Color(0xFF1B4D3E),
-            ),
-          ),
+          // Text(
+          //   "Ward Area",
+          //   style: TextStyle(
+          //     fontSize: 14.spMin,
+          //     fontWeight: FontWeight.w800,
+          //     color: const Color(0xFF1B4D3E),
+          //   ),
+          // ),
           SizedBox(height: 10.spMin),
           _buildDropdownContainer(
             value: adminVm.selectedWard,
@@ -282,9 +282,8 @@ class AdminCollectorFilterSheet extends StatelessWidget {
           color: isSelected ? const Color(0xFFF1F8F1) : const Color(0xFFF9FAF9),
           borderRadius: BorderRadius.circular(12.spMin),
           border: Border.all(
-            color: isSelected
-                ? const Color(0xFF1D723C)
-                : const Color(0xFFE0E0E0),
+            color:
+                isSelected ? const Color(0xFF1D723C) : const Color(0xFFE0E0E0),
             width: isSelected ? 1.3.spMin : 1.spMin,
           ),
         ),

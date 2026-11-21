@@ -1,14 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import 'package:suchigo_collector/features/admin/view/widgets/assign_vehicle_dialog.dart';
 import 'package:suchigo_collector/features/auth/view/login_screen.dart';
 import 'package:suchigo_collector/features/auth/view_model/auth_view_model.dart';
 import 'package:suchigo_collector/features/history/view/collection_history_screen.dart';
+import 'package:suchigo_collector/features/history/view_model/history_view_model.dart';
+import 'package:suchigo_collector/features/orders/view_model/order_view_model.dart';
 import 'package:suchigo_collector/features/wards/view/select_ward_screen.dart';
+import 'package:suchigo_collector/features/wards/view_model/ward_view_model.dart';
 import 'package:suchigo_collector/models/collector_model.dart';
 import 'package:suchigo_collector/features/home/view_model/home_view_model.dart';
+import 'package:suchigo_collector/services/notification_service.dart';
 import 'package:suchigo_collector/utils/suchigo_colors.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -21,14 +27,284 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  bool _isNotificationPermissionGranted = true;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         context.read<HomeViewModel>().fetchDistricts();
+        _checkAndRequestNotificationPermission();
       }
     });
+  }
+
+  Future<void> _checkAndRequestNotificationPermission() async {
+    try {
+      final status = await Permission.notification.status;
+      if (status.isDenied) {
+        final result = await Permission.notification.request();
+        if (mounted) {
+          setState(() {
+            _isNotificationPermissionGranted = result.isGranted;
+          });
+        }
+        if (result.isGranted) {
+          await NotificationService().getFcmToken();
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            _isNotificationPermissionGranted = status.isGranted;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('[HomeScreen] Error requesting notification permission: $e');
+    }
+  }
+
+  Future<void> _handleNotificationPermissionTap() async {
+    try {
+      final status = await Permission.notification.status;
+      if (status.isGranted) {
+        final token = NotificationService().fcmToken ??
+            await NotificationService().getFcmToken();
+        if (!mounted) return;
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20.spMin),
+            ),
+            title: Row(
+              children: [
+                Icon(
+                  Icons.notifications_active_rounded,
+                  color: const Color(0xFF1D723C),
+                  size: 24.spMin,
+                ),
+                SizedBox(width: 10.spMin),
+                const Text("Notifications Active"),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  "Real-time notifications are enabled. You will receive instant alerts for customer payments and pickups.",
+                ),
+                if (token != null && token.isNotEmpty) ...[
+                  SizedBox(height: 12.spMin),
+                  Text(
+                    "Device Token (FCM):",
+                    style: TextStyle(
+                      fontSize: 12.spMin,
+                      fontWeight: FontWeight.bold,
+                      color: const Color(0xFF135C30),
+                    ),
+                  ),
+                  SizedBox(height: 4.spMin),
+                  Container(
+                    padding: EdgeInsets.all(8.spMin),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF5F5F5),
+                      borderRadius: BorderRadius.circular(8.spMin),
+                      border: Border.all(color: const Color(0xFFE0E0E0)),
+                    ),
+                    child: SelectableText(
+                      token,
+                      style: TextStyle(
+                        fontSize: 10.spMin,
+                        color: const Color(0xFF424242),
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: 10.spMin),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () {
+                            Clipboard.setData(ClipboardData(text: token));
+                            Fluttertoast.showToast(
+                              msg: "FCM Token copied to clipboard!",
+                            );
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF1D723C),
+                            foregroundColor: Colors.white,
+                          ),
+                          icon: const Icon(Icons.copy_rounded, size: 16),
+                          label: const Text(
+                            "Copy Token",
+                            style: TextStyle(fontSize: 12),
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 8.spMin),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () async {
+                            // await NotificationService().showTestLocalNotification();
+                            Fluttertoast.showToast(
+                              msg: "Test notification sent to status bar!",
+                            );
+                          },
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF1D723C),
+                            side: const BorderSide(color: Color(0xFF1D723C)),
+                          ),
+                          icon: const Icon(Icons.notifications_active_outlined,
+                              size: 16),
+                          label: const Text(
+                            "Test Alert",
+                            style: TextStyle(fontSize: 12),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text("OK"),
+              ),
+            ],
+          ),
+        );
+      } else if (status.isPermanentlyDenied) {
+        if (!mounted) return;
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20.spMin),
+            ),
+            title: Row(
+              children: [
+                Icon(
+                  Icons.notifications_off_rounded,
+                  color: const Color(0xFFE53935),
+                  size: 24.spMin,
+                ),
+                SizedBox(width: 10.spMin),
+                const Text("Permission Needed"),
+              ],
+            ),
+            content: const Text(
+              "Notifications are permanently disabled for Suchigo Collector. Please open App Settings and enable Notifications to receive real-time payment alerts.",
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text("Cancel"),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  openAppSettings();
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1D723C),
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text("Open Settings"),
+              ),
+            ],
+          ),
+        );
+      } else {
+        final result = await Permission.notification.request();
+        if (mounted) {
+          setState(() {
+            _isNotificationPermissionGranted = result.isGranted;
+          });
+        }
+        if (result.isGranted) {
+          Fluttertoast.showToast(msg: "Notification permission granted!");
+          await NotificationService().getFcmToken();
+        }
+      }
+    } catch (e) {
+      debugPrint('[HomeScreen] Permission tap error: $e');
+    }
+  }
+
+  Widget _buildNotificationPermissionBanner() {
+    if (_isNotificationPermissionGranted) return const SizedBox.shrink();
+    return Container(
+      margin: EdgeInsets.fromLTRB(18.spMin, 12.spMin, 18.spMin, 4.spMin),
+      padding: EdgeInsets.symmetric(horizontal: 14.spMin, vertical: 12.spMin),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF8E1),
+        borderRadius: BorderRadius.circular(16.spMin),
+        border: Border.all(color: const Color(0xFFFFE082), width: 1.2.spMin),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.notifications_off_rounded,
+            color: const Color(0xFFF57F17),
+            size: 24.spMin,
+          ),
+          SizedBox(width: 12.spMin),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "Notifications Disabled",
+                  style: TextStyle(
+                    fontSize: 13.5.spMin,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFFE65100),
+                  ),
+                ),
+                SizedBox(height: 2.spMin),
+                Text(
+                  "Enable permissions to receive real-time payment alerts.",
+                  style: TextStyle(
+                    fontSize: 11.5.spMin,
+                    color: const Color(0xFF757575),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          SizedBox(width: 8.spMin),
+          ElevatedButton(
+            onPressed: _handleNotificationPermissionTap,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1D723C),
+              foregroundColor: Colors.white,
+              elevation: 0,
+              padding: EdgeInsets.symmetric(
+                horizontal: 12.spMin,
+                vertical: 8.spMin,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10.spMin),
+              ),
+            ),
+            child: Text(
+              "Enable",
+              style: TextStyle(
+                fontSize: 12.spMin,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   void _handleSaveProfile() async {
@@ -178,8 +454,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   children: [
                     _buildSavedSummaryRow(
                       icon: Icons.map_outlined,
-                      label: "DISTRICT",
-                      value: homeVm.selectedDistrict?.name ?? "Ernakulam",
+                      label: "DISTRICT *",
+                      value: homeVm.selectedDistrict?.name ?? "",
                     ),
                     Divider(
                       color: const Color(0xFFE0E0E0),
@@ -188,8 +464,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     _buildSavedSummaryRow(
                       icon: Icons.location_city_outlined,
-                      label: "LOCAL BODY",
-                      value: homeVm.selectedLocalBody?.name ?? "Alangad",
+                      label: "LOCAL BODY *",
+                      value: homeVm.selectedLocalBody?.name ?? "",
                     ),
                     Divider(
                       color: const Color(0xFFE0E0E0),
@@ -198,7 +474,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     _buildSavedSummaryRow(
                       icon: Icons.location_on_outlined,
-                      label: "WARD DETAILS",
+                      label: "WARD DETAILS (OPTIONAL)",
                       value: homeVm.selectedWard?.displayName ??
                           (homeVm.wards.isNotEmpty
                               ? "All Wards (${homeVm.wards.length})"
@@ -343,6 +619,10 @@ class _HomeScreenState extends State<HomeScreen> {
     );
 
     if (shouldLogout == true && mounted) {
+      await context.read<HomeViewModel>().clearSelections();
+      context.read<WardViewModel>().reset();
+      context.read<OrderViewModel>().reset();
+      context.read<HistoryViewModel>().reset();
       await context.read<AuthViewModel>().logout();
       if (mounted) {
         Navigator.pushNamedAndRemoveUntil(
@@ -361,12 +641,10 @@ class _HomeScreenState extends State<HomeScreen> {
     final collector = authVm.collector;
     final collectorName = collector?.name.isNotEmpty == true
         ? collector!.name
-        : (collector?.username.isNotEmpty == true
-            ? collector!.username
-            : "shyam");
+        : (collector?.username.isNotEmpty == true ? collector!.username : "");
 
     // Vehicle name & number formatting
-    String vehicleDisplay = "Tata Ace (KL 07 AB 1239)";
+    String vehicleDisplay = "";
     if (authVm.vehicle != null && authVm.vehicle!.vehicleName.isNotEmpty) {
       vehicleDisplay =
           "${authVm.vehicle!.vehicleName} (${authVm.vehicle!.vehicleNumber})";
@@ -411,7 +689,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       children: [
                         SizedBox(height: 12.spMin),
 
-                        // Header Section [Collector Console | Logout & On Duty]
+                        // Header Section [
+                        // | Logout & On Duty]
                         Padding(
                           padding: EdgeInsets.symmetric(horizontal: 20.spMin),
                           child: Row(
@@ -452,26 +731,66 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ],
                               ),
 
-                              // Right: Logout button & On Duty badge
+                              // Right: Notification status, Logout button & On Duty badge
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.end,
                                 children: [
-                                  // Logout Button (Circular pale peach container)
-                                  GestureDetector(
-                                    onTap: _handleLogout,
-                                    child: Container(
-                                      width: 44.spMin,
-                                      height: 44.spMin,
-                                      decoration: const BoxDecoration(
-                                        color: Color(0xFFFBEBE8),
-                                        shape: BoxShape.circle,
+                                  Row(
+                                    children: [
+                                      // Notification Permission Button
+                                      GestureDetector(
+                                        onTap: _handleNotificationPermissionTap,
+                                        child: Container(
+                                          width: 44.spMin,
+                                          height: 44.spMin,
+                                          decoration: BoxDecoration(
+                                            color:
+                                                _isNotificationPermissionGranted
+                                                    ? const Color(0xFFE8F5E9)
+                                                    : const Color(0xFFFFF3E0),
+                                            shape: BoxShape.circle,
+                                            border: Border.all(
+                                              color:
+                                                  _isNotificationPermissionGranted
+                                                      ? const Color(0xFFC8E6C9)
+                                                      : const Color(0xFFFFCC80),
+                                              width: 1.spMin,
+                                            ),
+                                          ),
+                                          child: Icon(
+                                            _isNotificationPermissionGranted
+                                                ? Icons
+                                                    .notifications_active_rounded
+                                                : Icons
+                                                    .notifications_off_rounded,
+                                            color:
+                                                _isNotificationPermissionGranted
+                                                    ? const Color(0xFF1D723C)
+                                                    : const Color(0xFFF57C00),
+                                            size: 20.spMin,
+                                          ),
+                                        ),
                                       ),
-                                      child: Icon(
-                                        Icons.logout_rounded,
-                                        color: const Color(0xFFD84A38),
-                                        size: 20.spMin,
+                                      SizedBox(width: 8.spMin),
+
+                                      // Logout Button (Circular pale peach container)
+                                      GestureDetector(
+                                        onTap: _handleLogout,
+                                        child: Container(
+                                          width: 44.spMin,
+                                          height: 44.spMin,
+                                          decoration: const BoxDecoration(
+                                            color: Color(0xFFFBEBE8),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: Icon(
+                                            Icons.logout_rounded,
+                                            color: const Color(0xFFD84A38),
+                                            size: 20.spMin,
+                                          ),
+                                        ),
                                       ),
-                                    ),
+                                    ],
                                   ),
 
                                   SizedBox(height: 14.spMin),
@@ -520,6 +839,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ),
 
+                        // Notification Permission Alert Banner (if disabled)
+                        _buildNotificationPermissionBanner(),
+
                         SizedBox(height: 16.spMin),
 
                         // Card 1: Profile & Region Configuration
@@ -538,7 +860,9 @@ class _HomeScreenState extends State<HomeScreen> {
                               color: homeVm.isProfileRecentlySaved
                                   ? const Color(0xFF81C784)
                                   : const Color(0xFFE8F5E9),
-                              width: homeVm.isProfileRecentlySaved ? 1.5.spMin : 1.spMin,
+                              width: homeVm.isProfileRecentlySaved
+                                  ? 1.5.spMin
+                                  : 1.spMin,
                             ),
                             boxShadow: [
                               BoxShadow(
@@ -589,6 +913,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               _buildDropdownRow<DistrictModel>(
                                 icon: Icons.map_outlined,
                                 label: "DISTRICT",
+                                isRequired: true,
                                 value: homeVm.selectedDistrict,
                                 hintText: homeVm.isLoadingDistricts
                                     ? "Loading Districts..."
@@ -619,6 +944,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               _buildDropdownRow<LocalBodyModel>(
                                 icon: Icons.location_city_outlined,
                                 label: "LOCALBODY",
+                                isRequired: true,
                                 value: homeVm.selectedLocalBody,
                                 hintText: homeVm.selectedDistrict == null
                                     ? "Select District first"
@@ -652,7 +978,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               // Item 3: WARD DETAILS (Inline Dropdown with Ward Name)
                               _buildDropdownRow<WardModel>(
                                 icon: Icons.location_on_outlined,
-                                label: "WARD DETAILS",
+                                label: "WARD DETAILS (OPTIONAL)",
                                 value: homeVm.selectedWard,
                                 onClear: homeVm.selectedWard != null
                                     ? () async {
@@ -713,26 +1039,26 @@ class _HomeScreenState extends State<HomeScreen> {
                               GestureDetector(
                                 behavior: HitTestBehavior.opaque,
                                 onTap: () {
-                                  final col = collector ??
-                                      authVm.collector ??
-                                      CollectorModel(
-                                        id: authVm.authResponse?.collector?.id ?? 0,
-                                        username: collectorName,
-                                        name: collectorName,
-                                        email: authVm.collector?.email ?? "",
-                                        phone: authVm.collector?.phone ?? "",
-                                        vehicleName:
-                                            authVm.vehicle?.vehicleName,
-                                        vehicleNumber:
-                                            authVm.vehicle?.vehicleNumber,
-                                      );
-                                  AssignVehicleDialog.show(
-                                    context,
-                                    collector: col,
-                                    onVehicleAssigned: () {
-                                      authVm.fetchCollectorVehicle();
-                                    },
-                                  );
+                                  // final col = collector ??
+                                  //     authVm.collector ??
+                                  //     CollectorModel(
+                                  //       id: authVm.authResponse?.collector?.id ?? 0,
+                                  //       username: collectorName,
+                                  //       name: collectorName,
+                                  //       email: authVm.collector?.email ?? "",
+                                  //       phone: authVm.collector?.phone ?? "",
+                                  //       vehicleName:
+                                  //           authVm.vehicle?.vehicleName,
+                                  //       vehicleNumber:
+                                  //           authVm.vehicle?.vehicleNumber,
+                                  //     );
+                                  // AssignVehicleDialog.show(
+                                  //   context,
+                                  //   collector: col,
+                                  //   onVehicleAssigned: () {
+                                  //     authVm.fetchCollectorVehicle();
+                                  //   },
+                                  // );
                                 },
                                 child: _buildStaticRow(
                                   icon: Icons.local_shipping_outlined,
@@ -792,7 +1118,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                               MainAxisAlignment.center,
                                           children: [
                                             Icon(
-                                              Icons.check_circle_outline_rounded,
+                                              Icons
+                                                  .check_circle_outline_rounded,
                                               color: Colors.white,
                                               size: 20.spMin,
                                             ),
@@ -917,10 +1244,13 @@ class _HomeScreenState extends State<HomeScreen> {
                                     context,
                                     MaterialPageRoute(
                                       builder: (context) => SelectWardScreen(
-                                        localBodyId: homeVm.selectedLocalBody?.id,
-                                        localBodyName: homeVm.selectedLocalBody?.name,
+                                        localBodyId:
+                                            homeVm.selectedLocalBody?.id,
+                                        localBodyName:
+                                            homeVm.selectedLocalBody?.name,
                                         selectedWard: homeVm.selectedWard,
-                                        selectedWardName: homeVm.selectedWard?.name,
+                                        selectedWardName:
+                                            homeVm.selectedWard?.name,
                                       ),
                                     ),
                                   );
@@ -1082,14 +1412,16 @@ class _HomeScreenState extends State<HomeScreen> {
                                               decoration: BoxDecoration(
                                                 color: const Color(0xFFEEEEEE),
                                                 borderRadius:
-                                                    BorderRadius.circular(10.spMin),
+                                                    BorderRadius.circular(
+                                                        10.spMin),
                                               ),
                                               child: Text(
                                                 "Disabled",
                                                 style: TextStyle(
                                                   fontSize: 10.spMin,
                                                   fontWeight: FontWeight.w600,
-                                                  color: const Color(0xFF757575),
+                                                  color:
+                                                      const Color(0xFF757575),
                                                 ),
                                               ),
                                             ),
@@ -1115,8 +1447,8 @@ class _HomeScreenState extends State<HomeScreen> {
                               // Button 1 (Disabled Filled Grey)
                               Container(
                                 height: 48.spMin,
-                                padding: EdgeInsets.symmetric(
-                                    horizontal: 16.spMin),
+                                padding:
+                                    EdgeInsets.symmetric(horizontal: 16.spMin),
                                 decoration: BoxDecoration(
                                   color: const Color(0xFFE0E0E0),
                                   borderRadius: BorderRadius.circular(16.spMin),
@@ -1153,8 +1485,8 @@ class _HomeScreenState extends State<HomeScreen> {
                               // Button 2 (Disabled Outlined Grey)
                               Container(
                                 height: 48.spMin,
-                                padding: EdgeInsets.symmetric(
-                                    horizontal: 16.spMin),
+                                padding:
+                                    EdgeInsets.symmetric(horizontal: 16.spMin),
                                 decoration: BoxDecoration(
                                   color: Colors.white,
                                   border: Border.all(
@@ -1249,6 +1581,7 @@ class _HomeScreenState extends State<HomeScreen> {
     required List<DropdownMenuItem<T>> items,
     required ValueChanged<T?>? onChanged,
     VoidCallback? onClear,
+    bool isRequired = false,
   }) {
     final T? safeValue =
         value != null && items.where((item) => item.value == value).length == 1
@@ -1270,14 +1603,29 @@ class _HomeScreenState extends State<HomeScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 10.spMin,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF9E9E9E),
-                    letterSpacing: 0.6.spMin,
-                  ),
+                Row(
+                  children: [
+                    Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 10.spMin,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF9E9E9E),
+                        letterSpacing: 0.6.spMin,
+                      ),
+                    ),
+                    if (isRequired) ...[
+                      SizedBox(width: 3.spMin),
+                      Text(
+                        '*',
+                        style: TextStyle(
+                          fontSize: 11.spMin,
+                          fontWeight: FontWeight.w900,
+                          color: const Color(0xFFD32F2F),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
                 SizedBox(height: 6.spMin),
                 Row(
