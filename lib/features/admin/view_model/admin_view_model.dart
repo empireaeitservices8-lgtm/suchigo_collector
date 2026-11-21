@@ -114,8 +114,8 @@ class AdminViewModel extends ChangeNotifier {
     // 5. Ward Filter
     if (_selectedWard != "All") {
       list = list
-          .where((item) =>
-              item.ward.toLowerCase() == _selectedWard.toLowerCase())
+          .where(
+              (item) => item.ward.toLowerCase() == _selectedWard.toLowerCase())
           .toList();
     }
 
@@ -154,7 +154,7 @@ class AdminViewModel extends ChangeNotifier {
         _dashboardData!.statistics.totalCollectors > 0) {
       return _dashboardData!.statistics.totalCollectors;
     }
-    return _collectorStatsList.isNotEmpty ? _collectorStatsList.length : 16;
+    return _collectorStatsList.isNotEmpty ? _collectorStatsList.length : 0;
   }
 
   int get onDutyCount {
@@ -162,26 +162,23 @@ class AdminViewModel extends ChangeNotifier {
     return activeInList > 0 ? activeInList : totalCollectorsCount;
   }
 
-  int get totalLocations => _dashboardData?.statistics.totalLocations ?? 41;
+  int get totalLocations => _dashboardData?.statistics.totalLocations ?? 0;
 
-  int get pendingPickups => _dashboardData?.statistics.pendingPickups ?? 41;
+  int get pendingPickups => _dashboardData?.statistics.pendingPickups ?? 0;
 
-  int get totalBills => _dashboardData?.statistics.totalBills ?? 63;
+  int get totalBills => _dashboardData?.statistics.totalBills ?? 0;
 
   double get totalQuantityKg {
-    return 122.5;
+    return 0;
   }
 
-  double get totalRevenue =>
-      _dashboardData?.statistics.totalRevenue ?? 63815.85;
+  double get totalRevenue => _dashboardData?.statistics.totalRevenue ?? 0.0;
 
   double get pendingCash => _dashboardData?.statistics.pendingCash ?? 0.0;
 
-  double get cashRevenue =>
-      _dashboardData?.statistics.totalCash ?? 25435.0;
+  double get cashRevenue => _dashboardData?.statistics.totalCash ?? 0.0;
 
-  double get onlineRevenue =>
-      _dashboardData?.statistics.totalOnline ?? 38380.85;
+  double get onlineRevenue => _dashboardData?.statistics.totalOnline ?? 0.0;
 
   double get cashPercentage {
     final total = cashRevenue + onlineRevenue;
@@ -282,28 +279,69 @@ class AdminViewModel extends ChangeNotifier {
   ];
 
   static final List<double> _sampleQuantities = [
-    45.5, 32.0, 58.2, 12.5, 78.0, 24.5, 66.8, 19.0, 84.2, 38.5, 52.0, 15.8, 91.0, 28.4, 47.6
+    45.5,
+    32.0,
+    58.2,
+    12.5,
+    78.0,
+    24.5,
+    66.8,
+    19.0,
+    84.2,
+    38.5,
+    52.0,
+    15.8,
+    91.0,
+    28.4,
+    47.6
   ];
 
   static final List<double> _sampleRevenues = [
-    1850.0, 1200.0, 2400.0, 650.0, 3100.0, 980.0, 2750.0, 820.0, 3450.0, 1560.0, 2100.0, 720.0, 3900.0, 1140.0, 1920.0
+    1850.0,
+    1200.0,
+    2400.0,
+    650.0,
+    3100.0,
+    980.0,
+    2750.0,
+    820.0,
+    3450.0,
+    1560.0,
+    2100.0,
+    720.0,
+    3900.0,
+    1140.0,
+    1920.0
   ];
 
   static final List<int> _samplePickups = [
-    12, 8, 15, 4, 18, 7, 14, 5, 21, 9, 13, 4, 23, 8, 11
+    12,
+    8,
+    15,
+    4,
+    18,
+    7,
+    14,
+    5,
+    21,
+    9,
+    13,
+    4,
+    23,
+    8,
+    11
   ];
 
-  static AdminCollectorStats _createStatsForCollector(CollectorModel c, int index) {
+  static AdminCollectorStats _createStatsForCollector(
+      CollectorModel c, int index) {
     // Read actual total_quantity, total_revenue, pickups from API (fallback to 0.0)
     final double quantity = c.totalQuantity > 0
         ? c.totalQuantity
         : (c.quantity > 0 ? c.quantity : 0.0);
-    final double revenue = c.totalRevenue > 0
-        ? c.totalRevenue
-        : (c.revenue > 0 ? c.revenue : 0.0);
-    final int pickups = c.totalPickups > 0
-        ? c.totalPickups
-        : (c.pickups > 0 ? c.pickups : 0);
+    final double revenue =
+        c.totalRevenue > 0 ? c.totalRevenue : (c.revenue > 0 ? c.revenue : 0.0);
+    final int pickups =
+        c.totalPickups > 0 ? c.totalPickups : (c.pickups > 0 ? c.pickups : 0);
     final double cash = c.cashCollected;
     final double online = c.onlineCollected;
 
@@ -311,17 +349,18 @@ class AdminViewModel extends ChangeNotifier {
         c.vehicleName != null && c.vehicleName!.trim().isNotEmpty;
     final bool isOnDuty = (c.isActive == true) || pickups > 0 || hasVehicle;
 
-    final String resolvedLocalBody = (c.localBodyName != null && c.localBodyName!.trim().isNotEmpty)
-        ? c.localBodyName!.trim()
-        : ((c.localBody != null && c.localBody!.trim().isNotEmpty)
-            ? c.localBody!.trim()
-            : "");
-    final String resolvedDistrict = (c.district != null && c.district!.trim().isNotEmpty)
-        ? c.district!.trim()
-        : "";
-    final String resolvedWard = (c.ward != null && c.ward!.trim().isNotEmpty)
-        ? c.ward!.trim()
-        : "";
+    final String resolvedLocalBody =
+        (c.localBodyName != null && c.localBodyName!.trim().isNotEmpty)
+            ? c.localBodyName!.trim()
+            : ((c.localBody != null && c.localBody!.trim().isNotEmpty)
+                ? c.localBody!.trim()
+                : "");
+    final String resolvedDistrict =
+        (c.district != null && c.district!.trim().isNotEmpty)
+            ? c.district!.trim()
+            : "";
+    final String resolvedWard =
+        (c.ward != null && c.ward!.trim().isNotEmpty) ? c.ward!.trim() : "";
 
     return AdminCollectorStats(
       collector: c,
@@ -498,7 +537,8 @@ class AdminViewModel extends ChangeNotifier {
     await fetchAdminData();
   }
 
-  Future<AdminCollectorHistoryModel?> fetchCollectorHistory(int collectorId) async {
+  Future<AdminCollectorHistoryModel?> fetchCollectorHistory(
+      int collectorId) async {
     try {
       return await _apiClient.getAdminCollectorHistory(collectorId);
     } catch (e) {
