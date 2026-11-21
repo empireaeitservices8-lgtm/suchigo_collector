@@ -148,7 +148,8 @@ class _ManageBagsScreenState extends State<ManageBagsScreen> {
             SizedBox(height: 12.spMin),
             TextField(
               controller: priceController,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
               decoration: InputDecoration(
                 labelText: "Price (₹)",
                 border: OutlineInputBorder(
@@ -176,7 +177,8 @@ class _ManageBagsScreenState extends State<ManageBagsScreen> {
                     final newBag = BagModel(
                       id: _bags.length + 1,
                       size: sizeController.text.trim(),
-                      price: double.tryParse(priceController.text.trim()) ?? 12.0,
+                      price:
+                          double.tryParse(priceController.text.trim()) ?? 12.0,
                       description: descController.text.trim().isNotEmpty
                           ? descController.text.trim()
                           : "${sizeController.text.trim()} waste bag",
@@ -241,19 +243,19 @@ class _ManageBagsScreenState extends State<ManageBagsScreen> {
         ),
         centerTitle: true,
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showAddBagDialog,
-        backgroundColor: const Color(0xFF1D723C),
-        elevation: 4,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18.spMin),
-        ),
-        child: Icon(
-          Icons.add_rounded,
-          color: Colors.white,
-          size: 30.spMin,
-        ),
-      ),
+      // floatingActionButton: FloatingActionButton(
+      //   onPressed: _showAddBagDialog,
+      //   backgroundColor: const Color(0xFF1D723C),
+      //   elevation: 4,
+      //   shape: RoundedRectangleBorder(
+      //     borderRadius: BorderRadius.circular(18.spMin),
+      //   ),
+      //   child: Icon(
+      //     Icons.add_rounded,
+      //     color: Colors.white,
+      //     size: 30.spMin,
+      //   ),
+      // ),
       body: Column(
         children: [
           SizedBox(height: 16.spMin),
@@ -368,8 +370,7 @@ class _ManageBagsScreenState extends State<ManageBagsScreen> {
                           vertical: 4.spMin,
                         ),
                         itemCount: _filteredBags.length,
-                        separatorBuilder: (_, __) =>
-                            SizedBox(height: 12.spMin),
+                        separatorBuilder: (_, __) => SizedBox(height: 12.spMin),
                         itemBuilder: (context, index) {
                           final bag = _filteredBags[index];
 
@@ -379,7 +380,8 @@ class _ManageBagsScreenState extends State<ManageBagsScreen> {
                               color: Colors.white,
                               borderRadius: BorderRadius.circular(20.spMin),
                               border: Border.all(
-                                color: const Color(0xFFC8E6C9).withValues(alpha: 0.5),
+                                color: const Color(0xFFC8E6C9)
+                                    .withValues(alpha: 0.5),
                                 width: 1.spMin,
                               ),
                               boxShadow: [
@@ -434,7 +436,8 @@ class _ManageBagsScreenState extends State<ManageBagsScreen> {
                                             decoration: BoxDecoration(
                                               color: const Color(0xFFE8F5E9),
                                               borderRadius:
-                                                  BorderRadius.circular(6.spMin),
+                                                  BorderRadius.circular(
+                                                      6.spMin),
                                             ),
                                             child: Text(
                                               "Active",
