@@ -327,8 +327,11 @@ class _WasteConfigurationScreenState extends State<WasteConfigurationScreen> {
                   ),
                   SizedBox(height: 18.spMin),
 
-                  // Radio Selector: Cash | Online Payment
-                  Row(
+                  // Mode Selector: Cash | Online Payment | Wallet
+                  Wrap(
+                    spacing: 24.spMin,
+                    runSpacing: 12.spMin,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       // Cash Radio
                       GestureDetector(
@@ -336,6 +339,7 @@ class _WasteConfigurationScreenState extends State<WasteConfigurationScreen> {
                           wasteVm.setPaymentMode('cash');
                         },
                         child: Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(
                               wasteVm.paymentMode == 'cash'
@@ -358,14 +362,26 @@ class _WasteConfigurationScreenState extends State<WasteConfigurationScreen> {
                           ],
                         ),
                       ),
-                      SizedBox(width: 28.spMin),
 
                       // Online Payment Radio
                       GestureDetector(
                         onTap: () {
                           wasteVm.setPaymentMode('online');
+                          if (wasteVm.finalTotal > 0 &&
+                              wasteVm.qrCodeBase64 == null) {
+                            final effectivePickupId =
+                                widget.order.pickupId ?? widget.order.id;
+                            wasteVm.fetchQrCode(
+                              effectivePickupId,
+                              localBody: widget.order.localBody ??
+                                  widget.order.ward,
+                              ward: widget.order.ward,
+                              userName: widget.order.name,
+                            );
+                          }
                         },
                         child: Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(
                               wasteVm.paymentMode == 'online'
@@ -388,13 +404,153 @@ class _WasteConfigurationScreenState extends State<WasteConfigurationScreen> {
                           ],
                         ),
                       ),
+
+                      // Wallet Checkbox Option
+                      GestureDetector(
+                        onTap: () {
+                          final effectiveWallet = wasteVm.walletBalance > 0
+                              ? wasteVm.walletBalance
+                              : (widget.order.walletBalance ?? 0.0);
+                          if (effectiveWallet <= 0) {
+                            Fluttertoast.showToast(
+                              msg: "No wallet balance available to redeem",
+                              toastLength: Toast.LENGTH_SHORT,
+                            );
+                            return;
+                          }
+                          wasteVm.toggleRedeemWallet();
+                          if (wasteVm.paymentMode == 'online') {
+                            final effectivePickupId =
+                                widget.order.pickupId ?? widget.order.id;
+                            if (wasteVm.finalTotal > 0) {
+                              wasteVm.fetchQrCode(
+                                effectivePickupId,
+                                localBody: widget.order.localBody ??
+                                    widget.order.ward,
+                                ward: widget.order.ward,
+                                userName: widget.order.name,
+                              );
+                            }
+                          }
+                        },
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              wasteVm.redeemWallet
+                                  ? Icons.check_box_rounded
+                                  : Icons.check_box_outline_blank_rounded,
+                              color: wasteVm.redeemWallet
+                                  ? const Color(0xFF1D723C)
+                                  : const Color(0xFF757575),
+                              size: 22.spMin,
+                            ),
+                            SizedBox(width: 8.spMin),
+                            Text(
+                              "Wallet",
+                              style: TextStyle(
+                                fontSize: 15.spMin,
+                                fontWeight: FontWeight.w700,
+                                color: const Color(0xFF1A1A1A),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
 
                   SizedBox(height: 20.spMin),
 
-                  // QR Code Card or Payment Success Card or Cash Info Card
-                  if (wasteVm.paymentMode == 'online')
+                  // QR Code Card or Payment Success Card or Cash Info Card or Wallet Fully Paid Card
+                  if (wasteVm.finalTotal == 0 && wasteVm.redeemWallet)
+                    Container(
+                      width: double.infinity,
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 20.spMin,
+                        vertical: 24.spMin,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF7FCF7),
+                        borderRadius: BorderRadius.circular(20.spMin),
+                        border: Border.all(
+                          color: const Color(0xFF81C784),
+                          width: 1.5.spMin,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF1D723C)
+                                .withValues(alpha: 0.08),
+                            blurRadius: 16.spMin,
+                            offset: Offset(0, 4.spMin),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        children: [
+                          Container(
+                            padding: EdgeInsets.all(14.spMin),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFE8F5E9),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Icons.account_balance_wallet_rounded,
+                              color: const Color(0xFF1D723C),
+                              size: 48.spMin,
+                            ),
+                          ),
+                          SizedBox(height: 14.spMin),
+                          Text(
+                            "Full Amount Paid via Wallet",
+                            style: TextStyle(
+                              fontSize: 18.spMin,
+                              fontWeight: FontWeight.w800,
+                              color: const Color(0xFF135C30),
+                              letterSpacing: -0.2.spMin,
+                            ),
+                          ),
+                          SizedBox(height: 6.spMin),
+                          Text(
+                            "₹${wasteVm.discount.toStringAsFixed(2)} Deducted",
+                            style: TextStyle(
+                              fontSize: 16.5.spMin,
+                              fontWeight: FontWeight.w800,
+                              color: const Color(0xFF1A1A1A),
+                            ),
+                          ),
+                          SizedBox(height: 4.spMin),
+                          Text(
+                            "Remaining Balance: ₹0.00",
+                            style: TextStyle(
+                              fontSize: 13.spMin,
+                              fontWeight: FontWeight.w600,
+                              color: const Color(0xFF757575),
+                            ),
+                          ),
+                          SizedBox(height: 12.spMin),
+                          Container(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 14.spMin,
+                              vertical: 6.spMin,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE8F5E9),
+                              borderRadius: BorderRadius.circular(20.spMin),
+                            ),
+                            child: Text(
+                              "Wallet Payment Applied • Ready to Confirm",
+                              style: TextStyle(
+                                fontSize: 11.5.spMin,
+                                fontWeight: FontWeight.w700,
+                                color: const Color(0xFF1D723C),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else if (wasteVm.paymentMode == 'online')
                     if (wasteVm.isPaymentSuccess)
                       Container(
                         width: double.infinity,
@@ -637,6 +793,18 @@ class _WasteConfigurationScreenState extends State<WasteConfigurationScreen> {
                                     color: const Color(0xFF135C30),
                                   ),
                                 ),
+                                if (wasteVm.redeemWallet &&
+                                    wasteVm.discount > 0) ...[
+                                  SizedBox(height: 4.spMin),
+                                  Text(
+                                    "₹${wasteVm.discount.toStringAsFixed(2)} deducted from wallet",
+                                    style: TextStyle(
+                                      fontSize: 12.spMin,
+                                      fontWeight: FontWeight.w600,
+                                      color: const Color(0xFF1D723C),
+                                    ),
+                                  ),
+                                ],
                               ],
                             ),
                           ),
@@ -682,7 +850,8 @@ class _WasteConfigurationScreenState extends State<WasteConfigurationScreen> {
                             builder: (context) {
                               final isVerifyEnabled =
                                   !wasteVm.isProcessingPayment &&
-                                      (wasteVm.paymentMode == 'cash' ||
+                                      (wasteVm.finalTotal == 0 ||
+                                          wasteVm.paymentMode == 'cash' ||
                                           wasteVm.isPaymentSuccess);
 
                               return ElevatedButton(
@@ -761,7 +930,13 @@ class _WasteConfigurationScreenState extends State<WasteConfigurationScreen> {
                                             SizedBox(width: 6.spMin),
                                           ],
                                           Text(
-                                            "Verify Payment",
+                                            wasteVm.finalTotal == 0
+                                                ? "Confirm Payment"
+                                                : (wasteVm.paymentMode == 'cash'
+                                                    ? "Confirm Cash"
+                                                    : (wasteVm.isPaymentSuccess
+                                                        ? "Verify & Complete"
+                                                        : "Verify Payment")),
                                             style: TextStyle(
                                               fontSize: 14.5.spMin,
                                               fontWeight: FontWeight.w800,
@@ -1651,12 +1826,44 @@ class _WasteConfigurationScreenState extends State<WasteConfigurationScreen> {
                                 },
                               ),
                               const Spacer(),
-                              Text(
-                                "Redeem",
-                                style: TextStyle(
-                                  fontSize: 13.5.spMin,
-                                  fontWeight: FontWeight.w800,
-                                  color: const Color(0xFF1D723C),
+                              GestureDetector(
+                                onTap: () {
+                                  final effectiveWallet = wasteVm.walletBalance > 0
+                                      ? wasteVm.walletBalance
+                                      : (widget.order.walletBalance ?? 0.0);
+                                  if (effectiveWallet <= 0) {
+                                    Fluttertoast.showToast(
+                                      msg: "No wallet balance available to redeem",
+                                      toastLength: Toast.LENGTH_SHORT,
+                                    );
+                                    return;
+                                  }
+                                  wasteVm.toggleRedeemWallet();
+                                },
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      wasteVm.redeemWallet
+                                          ? Icons.check_box_rounded
+                                          : Icons.check_box_outline_blank_rounded,
+                                      color: wasteVm.redeemWallet
+                                          ? const Color(0xFF1D723C)
+                                          : const Color(0xFF757575),
+                                      size: 20.spMin,
+                                    ),
+                                    SizedBox(width: 5.spMin),
+                                    Text(
+                                      "Redeem",
+                                      style: TextStyle(
+                                        fontSize: 13.5.spMin,
+                                        fontWeight: FontWeight.w800,
+                                        color: wasteVm.redeemWallet
+                                            ? const Color(0xFF1D723C)
+                                            : const Color(0xFF757575),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                               SizedBox(width: 10.spMin),

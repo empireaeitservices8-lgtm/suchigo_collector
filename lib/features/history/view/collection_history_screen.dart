@@ -29,6 +29,49 @@ class _CollectionHistoryScreenState extends State<CollectionHistoryScreen> {
     "Scrap/Other",
   ];
 
+  DateTime? _tryParseAnyDate(String rawDate) {
+    final trimmed = rawDate.trim();
+    if (trimmed.isEmpty) return null;
+    final isoParsed = DateTime.tryParse(trimmed);
+    if (isoParsed != null) return isoParsed;
+
+    final parts = trimmed.split(RegExp(r'[-/.\s]'));
+    if (parts.length >= 3) {
+      if (parts[0].length == 4) {
+        final y = int.tryParse(parts[0]);
+        final m = int.tryParse(parts[1]);
+        final d = int.tryParse(parts[2]);
+        if (y != null && m != null && d != null) return DateTime(y, m, d);
+      } else if (parts[2].length == 4) {
+        final d = int.tryParse(parts[0]);
+        final m = int.tryParse(parts[1]);
+        final y = int.tryParse(parts[2]);
+        if (y != null && m != null && d != null) return DateTime(y, m, d);
+      }
+    }
+    return null;
+  }
+
+  bool _isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  bool _isSameDayDate(String rawDate, DateTime target) {
+    final trimmed = rawDate.trim().toLowerCase();
+    if (trimmed == 'today' && _isSameDay(target, DateTime.now())) return true;
+    final parsed = _tryParseAnyDate(rawDate);
+    if (parsed != null) {
+      return parsed.year == target.year &&
+          parsed.month == target.month &&
+          parsed.day == target.day;
+    }
+    final ymd =
+        "${target.year}-${target.month.toString().padLeft(2, '0')}-${target.day.toString().padLeft(2, '0')}";
+    final dmy =
+        "${target.day.toString().padLeft(2, '0')}-${target.month.toString().padLeft(2, '0')}-${target.year}";
+    return trimmed.contains(ymd) || trimmed.contains(dmy);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -959,11 +1002,38 @@ class _CollectionHistoryScreenState extends State<CollectionHistoryScreen> {
 
   // TAB 2: DAILY SUMMARY
   Widget _buildDailySummaryTab(HistoryViewModel historyVm) {
-    final dailySummary = historyVm.dailySummary;
-    final totalKg = historyVm.overview.totalQuantityKg > 0
-        ? historyVm.overview.totalQuantityKg
-        : dailySummary.fold<double>(
-            0.0, (sum, item) => sum + item.totalQuantityKg);
+    final now = DateTime.now();
+    final dailySummary = historyVm.dailySummary.where((item) {
+      return _isSameDayDate(item.date, now);
+    }).toList();
+
+    // Fallback: If backend dailySummary doesn't have today's item, check today's completed records
+    final todayRecords = historyVm.allRecords.where((r) {
+      if (r.pickupDate != null && r.pickupDate!.isNotEmpty) {
+        return _isSameDayDate(r.pickupDate!, now);
+      }
+      return false;
+    }).toList();
+
+    List<DailySummaryItemModel> displaySummary = List.from(dailySummary);
+    if (displaySummary.isEmpty && todayRecords.isNotEmpty) {
+      final totalQuantity =
+          todayRecords.fold<double>(0.0, (sum, r) => sum + r.quantityKg);
+      final totalAmount =
+          todayRecords.fold<double>(0.0, (sum, r) => sum + r.amount);
+      displaySummary.add(
+        DailySummaryItemModel(
+          date:
+              "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}",
+          totalOrders: todayRecords.length,
+          totalQuantityKg: totalQuantity,
+          totalAmount: totalAmount,
+        ),
+      );
+    }
+
+    final totalKg = displaySummary.fold<double>(
+        0.0, (sum, item) => sum + item.totalQuantityKg);
 
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
@@ -985,7 +1055,7 @@ class _CollectionHistoryScreenState extends State<CollectionHistoryScreen> {
 
           SizedBox(height: 18.spMin),
 
-          if (dailySummary.isEmpty)
+          if (displaySummary.isEmpty)
             Container(
               width: double.infinity,
               padding: EdgeInsets.symmetric(
@@ -1024,10 +1094,10 @@ class _CollectionHistoryScreenState extends State<CollectionHistoryScreen> {
             ListView.separated(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              itemCount: dailySummary.length,
+              itemCount: displaySummary.length,
               separatorBuilder: (_, __) => SizedBox(height: 12.spMin),
               itemBuilder: (context, index) {
-                final item = dailySummary[index];
+                final item = displaySummary[index];
                 return Container(
                   padding: EdgeInsets.all(16.spMin),
                   decoration: BoxDecoration(

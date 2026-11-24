@@ -349,6 +349,8 @@ class LocationPickupModel {
   final String? pickupDay;
   final int? calendarDate;
   final double? walletBalance;
+  final double? latitude;
+  final double? longitude;
 
   LocationPickupModel({
     required this.id,
@@ -381,9 +383,59 @@ class LocationPickupModel {
     this.pickupDay,
     this.calendarDate,
     this.walletBalance,
+    this.latitude,
+    this.longitude,
   });
 
   factory LocationPickupModel.fromJson(Map<String, dynamic> json) {
+    double? parsedLat;
+    if (json['latitude'] != null) {
+      parsedLat = double.tryParse(json['latitude'].toString());
+    } else if (json['lat'] != null) {
+      parsedLat = double.tryParse(json['lat'].toString());
+    } else if (json['customer_lat'] != null) {
+      parsedLat = double.tryParse(json['customer_lat'].toString());
+    } else if (json['location_lat'] != null) {
+      parsedLat = double.tryParse(json['location_lat'].toString());
+    } else if (json['pickup_lat'] != null) {
+      parsedLat = double.tryParse(json['pickup_lat'].toString());
+    } else if (json['coordinates'] is Map &&
+        (json['coordinates'] as Map)['latitude'] != null) {
+      parsedLat = double.tryParse(
+          (json['coordinates'] as Map)['latitude'].toString());
+    } else if (json['coordinates'] is Map &&
+        (json['coordinates'] as Map)['lat'] != null) {
+      parsedLat =
+          double.tryParse((json['coordinates'] as Map)['lat'].toString());
+    }
+
+    double? parsedLng;
+    if (json['longitude'] != null) {
+      parsedLng = double.tryParse(json['longitude'].toString());
+    } else if (json['lng'] != null) {
+      parsedLng = double.tryParse(json['lng'].toString());
+    } else if (json['long'] != null) {
+      parsedLng = double.tryParse(json['long'].toString());
+    } else if (json['lon'] != null) {
+      parsedLng = double.tryParse(json['lon'].toString());
+    } else if (json['customer_lng'] != null) {
+      parsedLng = double.tryParse(json['customer_lng'].toString());
+    } else if (json['customer_long'] != null) {
+      parsedLng = double.tryParse(json['customer_long'].toString());
+    } else if (json['location_lng'] != null) {
+      parsedLng = double.tryParse(json['location_lng'].toString());
+    } else if (json['pickup_lng'] != null) {
+      parsedLng = double.tryParse(json['pickup_lng'].toString());
+    } else if (json['coordinates'] is Map &&
+        (json['coordinates'] as Map)['longitude'] != null) {
+      parsedLng = double.tryParse(
+          (json['coordinates'] as Map)['longitude'].toString());
+    } else if (json['coordinates'] is Map &&
+        (json['coordinates'] as Map)['lng'] != null) {
+      parsedLng =
+          double.tryParse((json['coordinates'] as Map)['lng'].toString());
+    }
+
     return LocationPickupModel(
       id: json['id'] is int
           ? json['id']
@@ -485,6 +537,8 @@ class LocationPickupModel {
           : (json['wallet'] != null
               ? (double.tryParse(json['wallet'].toString()) ?? 0.0)
               : null),
+      latitude: parsedLat,
+      longitude: parsedLng,
     );
   }
 
@@ -514,6 +568,8 @@ class LocationPickupModel {
         'pickup_day': pickupDay,
         'calendar_date': calendarDate,
         'wallet_balance': walletBalance,
+        'latitude': latitude,
+        'longitude': longitude,
       };
 
   LocationPickupModel copyWith({
@@ -547,6 +603,8 @@ class LocationPickupModel {
     String? pickupDay,
     int? calendarDate,
     double? walletBalance,
+    double? latitude,
+    double? longitude,
   }) {
     return LocationPickupModel(
       id: id ?? this.id,
@@ -579,6 +637,8 @@ class LocationPickupModel {
       pickupDay: pickupDay ?? this.pickupDay,
       calendarDate: calendarDate ?? this.calendarDate,
       walletBalance: walletBalance ?? this.walletBalance,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
     );
   }
 }

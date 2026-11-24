@@ -9,6 +9,7 @@ import 'package:suchigo_collector/features/home/view/home_screen.dart';
 import 'package:suchigo_collector/features/onboarding/view/onboarding_screen.dart';
 import 'package:suchigo_collector/features/orders/view/active_orders_screen.dart';
 import 'package:suchigo_collector/features/orders/view/navigation_screen.dart';
+import 'package:suchigo_collector/features/orders/view/orders_map_screen.dart';
 import 'package:suchigo_collector/features/orders/view/update_status_screen.dart';
 import 'package:suchigo_collector/features/orders/view/waste_configuration_screen.dart';
 import 'package:suchigo_collector/features/splashscreen/view/splashscreen.dart';
@@ -30,6 +31,7 @@ Map<String, Widget Function(BuildContext context)> appRoutes() => {
           const ManageWasteTypesScreen(),
       CollectionHistoryScreen.routeName: (context) =>
           const CollectionHistoryScreen(),
+      OrdersMapScreen.routeName: (context) => const OrdersMapScreen(),
     };
 
 Widget? _getScreen(RouteSettings settings) {
@@ -61,6 +63,12 @@ Widget? _getScreen(RouteSettings settings) {
       final args = settings.arguments;
       if (args is String) {
         return ActiveOrdersScreen(filterWard: args);
+      } else if (args is Map<String, dynamic>) {
+        return ActiveOrdersScreen(
+          filterWard: args['filterWard'] as String?,
+          filterLocalBody: args['filterLocalBody'] as String?,
+          localBodyId: args['localBodyId'] as int?,
+        );
       }
       return const ActiveOrdersScreen();
     case ManageBagsScreen.routeName:
@@ -78,6 +86,8 @@ Widget? _getScreen(RouteSettings settings) {
       return WasteConfigurationScreen(order: order);
     case CollectionHistoryScreen.routeName:
       return const CollectionHistoryScreen();
+    case OrdersMapScreen.routeName:
+      return const OrdersMapScreen();
     case ConnectionFailedScreen.routeName:
       ConnectionFailedScreenParams params =
           settings.arguments as ConnectionFailedScreenParams;

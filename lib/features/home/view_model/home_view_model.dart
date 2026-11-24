@@ -97,6 +97,7 @@ class HomeViewModel extends ChangeNotifier {
     _selectedDistrict = district;
     _selectedLocalBody = null;
     _selectedWard = null;
+    _isProfileRecentlySaved = false;
     notifyListeners();
     if (district != null) {
       fetchLocalBodies(district.id);
@@ -106,6 +107,7 @@ class HomeViewModel extends ChangeNotifier {
   void selectLocalBody(LocalBodyModel? localBody) {
     _selectedLocalBody = localBody;
     _selectedWard = null;
+    _isProfileRecentlySaved = false;
     notifyListeners();
     if (localBody != null) {
       fetchWards(localBody.id);
@@ -114,13 +116,18 @@ class HomeViewModel extends ChangeNotifier {
 
   Future<void> selectWard(WardModel? ward) async {
     _selectedWard = ward;
+    _isProfileRecentlySaved = false;
     notifyListeners();
     if (ward != null) {
       await SpHelper.saveString('profile_saved_ward', ward.displayName);
+      await SpHelper.saveString('profile_saved_ward_name', ward.name);
+      await SpHelper.saveString('profile_saved_ward_id', ward.id.toString());
       await SpHelper.saveString(
           'profile_saved_ward_number', ward.wardNumber ?? '1');
     } else {
       await SpHelper.remove('profile_saved_ward');
+      await SpHelper.remove('profile_saved_ward_name');
+      await SpHelper.remove('profile_saved_ward_id');
       await SpHelper.remove('profile_saved_ward_number');
     }
   }
@@ -138,17 +145,25 @@ class HomeViewModel extends ChangeNotifier {
         await SpHelper.saveString(
             'profile_saved_ward', _selectedWard!.displayName);
         await SpHelper.saveString(
+            'profile_saved_ward_name', _selectedWard!.name);
+        await SpHelper.saveString(
+            'profile_saved_ward_id', _selectedWard!.id.toString());
+        await SpHelper.saveString(
             'profile_saved_ward_number', _selectedWard!.wardNumber ?? '1');
       } else {
         await SpHelper.remove('profile_saved_ward');
+        await SpHelper.remove('profile_saved_ward_name');
+        await SpHelper.remove('profile_saved_ward_id');
         await SpHelper.remove('profile_saved_ward_number');
       }
       await SpHelper.saveString(
+          'profile_saved_district_id', _selectedDistrict!.id.toString());
+      await SpHelper.saveString(
           'profile_saved_district', _selectedDistrict!.name);
       await SpHelper.saveString(
-          'profile_saved_localbody', _selectedLocalBody!.name);
-      await SpHelper.saveString(
           'profile_saved_localbody_id', _selectedLocalBody!.id.toString());
+      await SpHelper.saveString(
+          'profile_saved_localbody', _selectedLocalBody!.name);
 
       _isSavingProfile = false;
       _isProfileRecentlySaved = true;
@@ -161,7 +176,109 @@ class HomeViewModel extends ChangeNotifier {
     }
   }
 
-  Future<void> clearSelections() async {
+  Future<void> loadSavedProfile({bool forceRefresh = false}) async {
+    try {
+      // 1. Fetch districts if empty or forceRefresh
+      if (forceRefresh || _districts.isEmpty) {
+        await fetchDistricts();
+      }
+
+      final savedDistrictIdStr =
+          await SpHelper.getString('profile_saved_district_id');
+      final savedDistrictName =
+          await SpHelper.getString('profile_saved_district');
+      final savedLocalBodyIdStr =
+          await SpHelper.getString('profile_saved_localbody_id');
+      final savedLocalBodyName =
+          await SpHelper.getString('profile_saved_localbody');
+      final savedWardIdStr = await SpHelper.getString('profile_saved_ward_id');
+      final savedWardName = await SpHelper.getString('profile_saved_ward');
+      final savedWardNumber =
+          await SpHelper.getString('profile_saved_ward_number');
+
+      if ((savedDistrictIdStr != null || savedDistrictName != null) &&
+          _districts.isNotEmpty) {
+        final districtId = int.tryParse(savedDistrictIdStr ?? '');
+        DistrictModel? matchedDistrict;
+        try {
+          matchedDistrict = _districts.firstWhere(
+            (d) =>
+                (districtId != null && d.id == districtId) ||
+                (savedDistrictName != null &&
+                    d.name.trim().toLowerCase() ==
+                        savedDistrictName.trim().toLowerCase()),
+          );
+        } catch (_) {}
+
+        if (matchedDistrict != null) {
+          _selectedDistrict = matchedDistrict;
+          notifyListeners();
+
+          // 2. Fetch local bodies for this district
+          await fetchLocalBodies(matchedDistrict.id);
+
+          if ((savedLocalBodyIdStr != null || savedLocalBodyName != null) &&
+              _localBodies.isNotEmpty) {
+            final localBodyId = int.tryParse(savedLocalBodyIdStr ?? '');
+            LocalBodyModel? matchedLocalBody;
+            try {
+              matchedLocalBody = _localBodies.firstWhere(
+                (lb) =>
+                    (localBodyId != null && lb.id == localBodyId) ||
+                    (savedLocalBodyName != null &&
+                        lb.name.trim().toLowerCase() ==
+                            savedLocalBodyName.trim().toLowerCase()),
+              );
+            } catch (_) {}
+
+            if (matchedLocalBody != null) {
+              _selectedLocalBody = matchedLocalBody;
+              notifyListeners();
+
+              // 3. Fetch wards for this local body
+              await fetchWards(matchedLocalBody.id);
+
+              if ((savedWardIdStr != null ||
+                      savedWardName != null ||
+                      savedWardNumber != null) &&
+                  _wards.isNotEmpty) {
+                final wardId = int.tryParse(savedWardIdStr ?? '');
+                WardModel? matchedWard;
+                try {
+                  matchedWard = _wards.firstWhere(
+                    (w) =>
+                        (wardId != null && w.id == wardId) ||
+                        (savedWardNumber != null &&
+                            (w.wardNumber == savedWardNumber ||
+                                w.wardNumber == "Ward $savedWardNumber")) ||
+                        (savedWardName != null &&
+                            (w.displayName.trim().toLowerCase() ==
+                                    savedWardName.trim().toLowerCase() ||
+                                w.name.trim().toLowerCase() ==
+                                    savedWardName.trim().toLowerCase())),
+                  );
+                } catch (_) {}
+
+                _selectedWard = matchedWard;
+              }
+              _isProfileRecentlySaved = true;
+              notifyListeners();
+            }
+          }
+        }
+      } else if (_selectedDistrict != null) {
+        // In case district was manually selected, refresh its local bodies and wards
+        await fetchLocalBodies(_selectedDistrict!.id);
+        if (_selectedLocalBody != null) {
+          await fetchWards(_selectedLocalBody!.id);
+        }
+      }
+    } catch (e) {
+      debugPrint('[HomeViewModel] loadSavedProfile error: $e');
+    }
+  }
+
+  Future<void> clearSelections({bool clearSavedPrefs = false}) async {
     _selectedDistrict = null;
     _selectedLocalBody = null;
     _selectedWard = null;
@@ -172,13 +289,18 @@ class HomeViewModel extends ChangeNotifier {
     _isSavingProfile = false;
     _isProfileRecentlySaved = false;
 
-    try {
-      await SpHelper.remove('profile_saved_ward');
-      await SpHelper.remove('profile_saved_ward_number');
-      await SpHelper.remove('profile_saved_district');
-      await SpHelper.remove('profile_saved_localbody');
-      await SpHelper.remove('profile_saved_localbody_id');
-    } catch (_) {}
+    if (clearSavedPrefs) {
+      try {
+        await SpHelper.remove('profile_saved_ward');
+        await SpHelper.remove('profile_saved_ward_name');
+        await SpHelper.remove('profile_saved_ward_id');
+        await SpHelper.remove('profile_saved_ward_number');
+        await SpHelper.remove('profile_saved_district');
+        await SpHelper.remove('profile_saved_district_id');
+        await SpHelper.remove('profile_saved_localbody');
+        await SpHelper.remove('profile_saved_localbody_id');
+      } catch (_) {}
+    }
 
     notifyListeners();
   }

@@ -313,11 +313,21 @@ class ApiClient {
   }
 
   /// GET locations/
-  Future<List<LocationPickupModel>> getLocations({String? ward}) async {
+  Future<List<LocationPickupModel>> getLocations({
+    String? ward,
+    String? localBody,
+    int? localBodyId,
+  }) async {
     try {
       final queryParams = <String, dynamic>{};
       if (ward != null && ward.trim().isNotEmpty) {
         queryParams['ward'] = ward.trim();
+      }
+      if (localBody != null && localBody.trim().isNotEmpty) {
+        queryParams['local_body'] = localBody.trim();
+      }
+      if (localBodyId != null) {
+        queryParams['local_body_id'] = localBodyId;
       }
       final response = await _dio.get(
         'locations/',

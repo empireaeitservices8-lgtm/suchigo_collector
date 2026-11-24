@@ -224,6 +224,14 @@ class WasteConfigurationViewModel extends ChangeNotifier {
     String? userName,
     int? collectorId,
   }) async {
+    if (finalTotal <= 0) {
+      _isLoadingQr = false;
+      _qrCodeBase64 = null;
+      _qrCodeUrl = null;
+      _razorpayOrderId = null;
+      notifyListeners();
+      return;
+    }
     _isLoadingQr = true;
     notifyListeners();
     try {
@@ -318,13 +326,13 @@ class WasteConfigurationViewModel extends ChangeNotifier {
       }
 
       // Finalize or generate bill if cash or if pending bill not created yet
-      if (_currentBillId == null || _paymentMode == 'cash') {
+      if (_currentBillId == null || _paymentMode == 'cash' || finalTotal == 0) {
         final billRes = await _apiClient.generateBill(
           pickupId: pickupId,
           weight: enteredWeight,
           rate: ratePerKg,
           totalAmount: finalTotal,
-          paymentMethod: paymentMode,
+          paymentMethod: finalTotal == 0 ? 'wallet' : paymentMode,
           localBody: localBody ?? ward,
           ward: ward,
           userName: userName,

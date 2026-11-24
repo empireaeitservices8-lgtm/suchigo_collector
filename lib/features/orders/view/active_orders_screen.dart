@@ -3,6 +3,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:suchigo_collector/features/home/view/home_screen.dart';
+import 'package:suchigo_collector/features/orders/view/orders_map_screen.dart';
 import 'package:suchigo_collector/features/orders/view/update_status_screen.dart';
 import 'package:suchigo_collector/features/orders/view_model/order_view_model.dart';
 import 'package:suchigo_collector/models/collector_model.dart';
@@ -13,8 +14,15 @@ class ActiveOrdersScreen extends StatefulWidget {
   static const routeName = '/ActiveOrdersScreen';
 
   final String? filterWard;
+  final String? filterLocalBody;
+  final int? localBodyId;
 
-  const ActiveOrdersScreen({super.key, this.filterWard});
+  const ActiveOrdersScreen({
+    super.key,
+    this.filterWard,
+    this.filterLocalBody,
+    this.localBodyId,
+  });
 
   @override
   State<ActiveOrdersScreen> createState() => _ActiveOrdersScreenState();
@@ -29,8 +37,14 @@ class _ActiveOrdersScreenState extends State<ActiveOrdersScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         final orderVm = context.read<OrderViewModel>();
+        orderVm.setLocalBodyFilter(widget.filterLocalBody);
         orderVm.setWardFilter(widget.filterWard);
-        orderVm.fetchActiveOrders(ward: widget.filterWard);
+        orderVm.fetchCurrentLocation();
+        orderVm.fetchActiveOrders(
+          ward: widget.filterWard,
+          localBody: widget.filterLocalBody,
+          localBodyId: widget.localBodyId,
+        );
       }
     });
   }
@@ -49,8 +63,13 @@ class _ActiveOrdersScreenState extends State<ActiveOrdersScreen> {
     await UrlLauncherHelper.openWhatsApp(phoneNumber);
   }
 
-  Future<void> _openGoogleMaps(String address) async {
-    await UrlLauncherHelper.openGoogleMaps(address);
+  Future<void> _openGoogleMaps(String address,
+      {double? latitude, double? longitude}) async {
+    await UrlLauncherHelper.openGoogleMaps(
+      address,
+      latitude: latitude,
+      longitude: longitude,
+    );
   }
 
   String _formatAddress(LocationPickupModel order) {
@@ -122,8 +141,35 @@ class _ActiveOrdersScreenState extends State<ActiveOrdersScreen> {
   Widget build(BuildContext context) {
     final orderVm = context.watch<OrderViewModel>();
 
+    final hasOrders = orderVm.filteredOrders.isNotEmpty;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF4FAF2),
+      floatingActionButton: hasOrders
+          ? Padding(
+              padding: EdgeInsets.only(bottom: 56.spMin),
+              child: FloatingActionButton.extended(
+                onPressed: () {
+                  Navigator.pushNamed(
+                    context,
+                    OrdersMapScreen.routeName,
+                  );
+                },
+                backgroundColor: const Color(0xFF1D723C),
+                foregroundColor: Colors.white,
+                elevation: 4,
+                icon: const Icon(Icons.map_rounded),
+                label: Text(
+                  "View on Map",
+                  style: TextStyle(
+                    fontSize: 13.5.spMin,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+              ),
+            )
+          : null,
       body: Stack(
         children: [
           // Background organic curved light green circle at top right
@@ -171,6 +217,86 @@ class _ActiveOrdersScreenState extends State<ActiveOrdersScreen> {
                           letterSpacing: -0.3.spMin,
                         ),
                       ),
+                      SizedBox(width: 8.spMin),
+                      Container(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 8.spMin,
+                          vertical: 3.spMin,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE8F5E9),
+                          borderRadius: BorderRadius.circular(12.spMin),
+                          border: Border.all(
+                            color: const Color(0xFF81C784),
+                            width: 1.spMin,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.calendar_today_rounded,
+                              size: 11.spMin,
+                              color: const Color(0xFF1D723C),
+                            ),
+                            SizedBox(width: 4.spMin),
+                            Text(
+                              DateFormat('dd MMM').format(DateTime.now()),
+                              style: TextStyle(
+                                fontSize: 11.spMin,
+                                fontWeight: FontWeight.w800,
+                                color: const Color(0xFF1D723C),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (orderVm.localBodyFilter != null &&
+                          orderVm.localBodyFilter!.trim().isNotEmpty) ...[
+                        SizedBox(width: 8.spMin),
+                        Flexible(
+                          child: Container(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 8.spMin,
+                              vertical: 3.spMin,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE8F5E9),
+                              borderRadius: BorderRadius.circular(12.spMin),
+                              border: Border.all(
+                                color: const Color(0xFF81C784),
+                                width: 1.spMin,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    orderVm.localBodyFilter!,
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
+                                    style: TextStyle(
+                                      fontSize: 11.spMin,
+                                      fontWeight: FontWeight.w700,
+                                      color: const Color(0xFF1D723C),
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(width: 4.spMin),
+                                GestureDetector(
+                                  onTap: () => orderVm.setLocalBodyFilter(null),
+                                  child: Icon(
+                                    Icons.close_rounded,
+                                    size: 13.spMin,
+                                    color: const Color(0xFF1D723C),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                       if (orderVm.wardFilter != null &&
                           orderVm.wardFilter!.trim().isNotEmpty) ...[
                         SizedBox(width: 8.spMin),
@@ -210,6 +336,56 @@ class _ActiveOrdersScreenState extends State<ActiveOrdersScreen> {
                                     Icons.close_rounded,
                                     size: 13.spMin,
                                     color: const Color(0xFF1D723C),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                      if (hasOrders) ...[
+                        const Spacer(),
+
+                        // Map View Button
+                        GestureDetector(
+                          onTap: () {
+                            Navigator.pushNamed(
+                              context,
+                              OrdersMapScreen.routeName,
+                            );
+                          },
+                          child: Container(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 10.spMin,
+                              vertical: 5.5.spMin,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1D723C),
+                              borderRadius: BorderRadius.circular(14.spMin),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFF1D723C)
+                                      .withValues(alpha: 0.28),
+                                  blurRadius: 6.spMin,
+                                  offset: Offset(0, 2.spMin),
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.map_rounded,
+                                  color: Colors.white,
+                                  size: 14.spMin,
+                                ),
+                                SizedBox(width: 4.spMin),
+                                Text(
+                                  "Map",
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12.spMin,
+                                    fontWeight: FontWeight.w700,
                                   ),
                                 ),
                               ],
@@ -294,13 +470,25 @@ class _ActiveOrdersScreenState extends State<ActiveOrdersScreen> {
                         )
                       : orderVm.filteredOrders.isEmpty
                           ? Center(
-                              child: Text(
-                                "No active orders found",
-                                style: TextStyle(
-                                  fontSize: 14.spMin,
-                                  fontWeight: FontWeight.w500,
-                                  color: const Color(0xFF9E9E9E),
-                                ),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.calendar_today_outlined,
+                                    size: 40.spMin,
+                                    color: const Color(0xFFBDBDBD),
+                                  ),
+                                  SizedBox(height: 10.spMin),
+                                  Text(
+                                    "No active orders for today (${DateFormat('dd MMM yyyy').format(DateTime.now())})",
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontSize: 13.5.spMin,
+                                      fontWeight: FontWeight.w600,
+                                      color: const Color(0xFF757575),
+                                    ),
+                                  ),
+                                ],
                               ),
                             )
                           : RefreshIndicator(
@@ -377,7 +565,10 @@ class _ActiveOrdersScreenState extends State<ActiveOrdersScreen> {
   }
 
   Widget _buildOrderCard(LocationPickupModel order) {
+    final orderVm = context.watch<OrderViewModel>();
     final fullAddress = _formatAddress(order);
+    final distanceText = orderVm.getFormattedDistance(order);
+    final coords = orderVm.getOrderCoordinates(order);
     final itemsDesc = order.itemsDescription?.isNotEmpty == true
         ? order.itemsDescription!
         : (order.wasteType?.isNotEmpty == true
@@ -408,7 +599,7 @@ class _ActiveOrdersScreenState extends State<ActiveOrdersScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Row 1: Name + Order ID Badge
+            // Row 1: Name + Distance Badge + Order ID Badge
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -446,6 +637,42 @@ class _ActiveOrdersScreenState extends State<ActiveOrdersScreen> {
                         fontWeight: FontWeight.w800,
                         color: const Color(0xFFE65100),
                       ),
+                    ),
+                  ),
+                ],
+                if (distanceText != null) ...[
+                  Container(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: 8.spMin,
+                      vertical: 4.spMin,
+                    ),
+                    margin: EdgeInsets.only(right: 6.spMin),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE8F5E9),
+                      borderRadius: BorderRadius.circular(8.spMin),
+                      border: Border.all(
+                        color: const Color(0xFFA5D6A7),
+                        width: 0.8.spMin,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.near_me_rounded,
+                          size: 11.5.spMin,
+                          color: const Color(0xFF1D723C),
+                        ),
+                        SizedBox(width: 4.spMin),
+                        Text(
+                          distanceText,
+                          style: TextStyle(
+                            fontSize: 11.5.spMin,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF1D723C),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -497,6 +724,15 @@ class _ActiveOrdersScreenState extends State<ActiveOrdersScreen> {
               text: fullAddress,
             ),
             SizedBox(height: 8.spMin),
+
+            // Row 4b: Distance
+            if (distanceText != null) ...[
+              _buildDetailRow(
+                icon: Icons.directions_car_outlined,
+                text: "Distance: $distanceText away",
+              ),
+              SizedBox(height: 8.spMin),
+            ],
 
             // Row 5: Items & Bags
             _buildDetailRow(
@@ -577,7 +813,11 @@ class _ActiveOrdersScreenState extends State<ActiveOrdersScreen> {
 
                 // Button 2: Map Location (Google Maps)
                 GestureDetector(
-                  onTap: () => _openGoogleMaps(fullAddress),
+                  onTap: () => _openGoogleMaps(
+                    fullAddress,
+                    latitude: coords?.$1,
+                    longitude: coords?.$2,
+                  ),
                   child: Container(
                     width: 38.spMin,
                     height: 38.spMin,

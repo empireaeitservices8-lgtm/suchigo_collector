@@ -69,13 +69,20 @@ class UrlLauncherHelper {
   }
 
   /// Opens Google Maps Navigation directly
-  static Future<void> openGoogleMaps(String address) async {
-    if (address.trim().isEmpty) {
-      Fluttertoast.showToast(msg: "Address not available");
-      return;
+  static Future<void> openGoogleMaps(String address,
+      {double? latitude, double? longitude}) async {
+    String query;
+    if (latitude != null && longitude != null) {
+      query = '$latitude,$longitude';
+    } else {
+      if (address.trim().isEmpty) {
+        Fluttertoast.showToast(msg: "Address not available");
+        return;
+      }
+      query = address.trim();
     }
 
-    final encoded = Uri.encodeComponent(address.trim());
+    final encoded = Uri.encodeComponent(query);
     // Direct Google Maps turn-by-turn navigation intent
     final Uri googleMapsNavUri =
         Uri.parse("google.navigation:q=$encoded&mode=d");

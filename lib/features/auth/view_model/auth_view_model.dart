@@ -147,6 +147,31 @@ class AuthViewModel extends ChangeNotifier {
     }
   }
 
+  Future<void> refreshCollectorData() async {
+    final collectorId =
+        _authResponse?.collector?.id ?? _apiClient.currentCollector?.id;
+    if (collectorId != null) {
+      try {
+        final overview =
+            await _apiClient.getCollectorOverview(collectorId: collectorId);
+        if (overview?.collector != null && _authResponse != null) {
+          _authResponse = AuthResponseModel(
+            message: _authResponse!.message,
+            token: _authResponse!.token,
+            collector: overview!.collector,
+          );
+        }
+      } catch (_) {}
+      try {
+        _vehicle = await _apiClient.getCollectorVehicle(collectorId);
+      } catch (_) {}
+      try {
+        _bagStatus = await _apiClient.getCollectorBagStatus(collectorId);
+      } catch (_) {}
+      notifyListeners();
+    }
+  }
+
   static final List<Future<void> Function()> _onLogoutCallbacks = [];
 
   static void addOnLogoutCallback(Future<void> Function() callback) {

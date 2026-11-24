@@ -9,6 +9,7 @@ import 'package:suchigo_collector/features/auth/view/login_screen.dart';
 import 'package:suchigo_collector/features/auth/view_model/auth_view_model.dart';
 import 'package:suchigo_collector/features/history/view/collection_history_screen.dart';
 import 'package:suchigo_collector/features/history/view_model/history_view_model.dart';
+import 'package:suchigo_collector/features/orders/view/active_orders_screen.dart';
 import 'package:suchigo_collector/features/orders/view_model/order_view_model.dart';
 import 'package:suchigo_collector/features/wards/view/select_ward_screen.dart';
 import 'package:suchigo_collector/features/wards/view_model/ward_view_model.dart';
@@ -28,13 +29,46 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   bool _isNotificationPermissionGranted = true;
+  bool _isRefreshing = false;
+
+  Future<void> _handleRefresh() async {
+    if (_isRefreshing) return;
+    setState(() {
+      _isRefreshing = true;
+    });
+
+    try {
+      await Future.wait([
+        context.read<HomeViewModel>().loadSavedProfile(forceRefresh: true),
+        context.read<AuthViewModel>().refreshCollectorData(),
+      ]);
+      if (mounted) {
+        Fluttertoast.showToast(
+          msg: "Collector Console refreshed",
+          toastLength: Toast.LENGTH_SHORT,
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: const Color(0xFF1D723C),
+          textColor: Colors.white,
+          fontSize: 14.0,
+        );
+      }
+    } catch (e) {
+      debugPrint('[HomeScreen] Refresh error: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isRefreshing = false;
+        });
+      }
+    }
+  }
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        context.read<HomeViewModel>().fetchDistricts();
+        context.read<HomeViewModel>().loadSavedProfile();
         _checkAndRequestNotificationPermission();
       }
     });
@@ -485,40 +519,82 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               SizedBox(height: 24.spMin),
 
-              // Done Button
-              SizedBox(
-                width: double.infinity,
-                height: 50.spMin,
-                child: ElevatedButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF1D723C),
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16.spMin),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.check_rounded,
-                        color: Colors.white,
-                        size: 20.spMin,
-                      ),
-                      SizedBox(width: 8.spMin),
-                      Text(
-                        "Done",
-                        style: TextStyle(
-                          fontSize: 15.spMin,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
+              // Actions: Done & View Active Orders
+              Row(
+                children: [
+                  Expanded(
+                    child: SizedBox(
+                      height: 50.spMin,
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(
+                            color: Color(0xFF1D723C),
+                            width: 1.5,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16.spMin),
+                          ),
+                        ),
+                        child: Text(
+                          "Done",
+                          style: TextStyle(
+                            fontSize: 14.spMin,
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFF1D723C),
+                          ),
                         ),
                       ),
-                    ],
+                    ),
                   ),
-                ),
+                  SizedBox(width: 12.spMin),
+                  Expanded(
+                    child: SizedBox(
+                      height: 50.spMin,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => ActiveOrdersScreen(
+                                filterLocalBody: homeVm.selectedLocalBody?.name,
+                                localBodyId: homeVm.selectedLocalBody?.id,
+                              ),
+                            ),
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF1D723C),
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16.spMin),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.assignment_outlined,
+                              color: Colors.white,
+                              size: 18.spMin,
+                            ),
+                            SizedBox(width: 6.spMin),
+                            Text(
+                              "View Orders",
+                              style: TextStyle(
+                                fontSize: 14.spMin,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -682,9 +758,15 @@ class _HomeScreenState extends State<HomeScreen> {
               children: [
                 // Scrollable Content
                 Expanded(
-                  child: SingleChildScrollView(
-                    physics: const BouncingScrollPhysics(),
-                    child: Column(
+                  child: RefreshIndicator(
+                    color: const Color(0xFF1D723C),
+                    backgroundColor: Colors.white,
+                    onRefresh: _handleRefresh,
+                    child: SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(
+                        parent: BouncingScrollPhysics(),
+                      ),
+                      child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         SizedBox(height: 12.spMin),
@@ -737,37 +819,43 @@ class _HomeScreenState extends State<HomeScreen> {
                                 children: [
                                   Row(
                                     children: [
-                                      // Notification Permission Button
+                                      // Refresh Action Button (Circular pale green container)
                                       GestureDetector(
-                                        onTap: _handleNotificationPermissionTap,
+                                        onTap: _isRefreshing
+                                            ? null
+                                            : _handleRefresh,
                                         child: Container(
                                           width: 44.spMin,
                                           height: 44.spMin,
                                           decoration: BoxDecoration(
-                                            color:
-                                                _isNotificationPermissionGranted
-                                                    ? const Color(0xFFE8F5E9)
-                                                    : const Color(0xFFFFF3E0),
+                                            color: const Color(0xFFE8F5E9),
                                             shape: BoxShape.circle,
                                             border: Border.all(
-                                              color:
-                                                  _isNotificationPermissionGranted
-                                                      ? const Color(0xFFC8E6C9)
-                                                      : const Color(0xFFFFCC80),
+                                              color: const Color(0xFFC8E6C9),
                                               width: 1.spMin,
                                             ),
                                           ),
-                                          child: Icon(
-                                            _isNotificationPermissionGranted
-                                                ? Icons
-                                                    .notifications_active_rounded
-                                                : Icons
-                                                    .notifications_off_rounded,
-                                            color:
-                                                _isNotificationPermissionGranted
-                                                    ? const Color(0xFF1D723C)
-                                                    : const Color(0xFFF57C00),
-                                            size: 20.spMin,
+                                          child: Center(
+                                            child: _isRefreshing
+                                                ? SizedBox(
+                                                    width: 18.spMin,
+                                                    height: 18.spMin,
+                                                    child:
+                                                        const CircularProgressIndicator(
+                                                      strokeWidth: 2,
+                                                      valueColor:
+                                                          AlwaysStoppedAnimation<
+                                                              Color>(
+                                                        Color(0xFF1D723C),
+                                                      ),
+                                                    ),
+                                                  )
+                                                : Icon(
+                                                    Icons.refresh_rounded,
+                                                    color:
+                                                        const Color(0xFF1D723C),
+                                                    size: 20.spMin,
+                                                  ),
                                           ),
                                         ),
                                       ),
@@ -904,6 +992,45 @@ class _HomeScreenState extends State<HomeScreen> {
                                       color: const Color(0xFF135C30),
                                     ),
                                   ),
+                                  const Spacer(),
+                                  if (homeVm.selectedDistrict != null &&
+                                      homeVm.selectedLocalBody != null)
+                                    Container(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: 8.spMin,
+                                        vertical: 3.spMin,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFE8F5E9),
+                                        borderRadius:
+                                            BorderRadius.circular(20.spMin),
+                                        border: Border.all(
+                                          color: const Color(0xFF81C784),
+                                          width: 1.spMin,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            Icons.check_circle_rounded,
+                                            size: 12.spMin,
+                                            color: const Color(0xFF1D723C),
+                                          ),
+                                          SizedBox(width: 4.spMin),
+                                          Text(
+                                            homeVm.isProfileRecentlySaved
+                                                ? "SAVED"
+                                                : "ACTIVE",
+                                            style: TextStyle(
+                                              fontSize: 10.spMin,
+                                              fontWeight: FontWeight.w800,
+                                              color: const Color(0xFF1D723C),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
                                 ],
                               ),
 
@@ -1237,20 +1364,29 @@ class _HomeScreenState extends State<HomeScreen> {
 
                               SizedBox(height: 16.spMin),
 
-                              // Button 1: View Active Wards & Orders (Filled Green)
+                              // Button 1: View Active Orders (Directly lists active orders for selected Local Body)
                               GestureDetector(
                                 onTap: () {
+                                  if (homeVm.selectedLocalBody == null) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                            "Please select a Local Body first"),
+                                        backgroundColor:
+                                            SuchigoColors.collectorGreen,
+                                        behavior: SnackBarBehavior.floating,
+                                      ),
+                                    );
+                                    return;
+                                  }
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
-                                      builder: (context) => SelectWardScreen(
+                                      builder: (context) => ActiveOrdersScreen(
+                                        filterLocalBody:
+                                            homeVm.selectedLocalBody?.name,
                                         localBodyId:
                                             homeVm.selectedLocalBody?.id,
-                                        localBodyName:
-                                            homeVm.selectedLocalBody?.name,
-                                        selectedWard: homeVm.selectedWard,
-                                        selectedWardName:
-                                            homeVm.selectedWard?.name,
                                       ),
                                     ),
                                   );
@@ -1267,14 +1403,14 @@ class _HomeScreenState extends State<HomeScreen> {
                                   child: Row(
                                     children: [
                                       Icon(
-                                        Icons.explore_outlined,
+                                        Icons.assignment_outlined,
                                         color: Colors.white,
                                         size: 20.spMin,
                                       ),
                                       SizedBox(width: 10.spMin),
                                       Expanded(
                                         child: Text(
-                                          "View Active Wards & Orders",
+                                          "View Active Orders",
                                           style: TextStyle(
                                             color: Colors.white,
                                             fontSize: 14.spMin,
@@ -1530,6 +1666,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                 ),
+              ),
 
                 // Bottom Floating Pill Navigation
                 Container(

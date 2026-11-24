@@ -102,7 +102,8 @@ class AdminProfileTab extends StatelessWidget {
           // 1. Main Profile Card
           Container(
             width: double.infinity,
-            padding: EdgeInsets.symmetric(horizontal: 20.spMin, vertical: 24.spMin),
+            padding:
+                EdgeInsets.symmetric(horizontal: 20.spMin, vertical: 24.spMin),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(24.spMin),

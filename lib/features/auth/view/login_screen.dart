@@ -90,11 +90,10 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted) return;
 
     if (success) {
-      await context.read<HomeViewModel>().clearSelections();
       context.read<WardViewModel>().reset();
       context.read<OrderViewModel>().reset();
       context.read<HistoryViewModel>().reset();
-      context.read<HomeViewModel>().fetchDistricts();
+      context.read<HomeViewModel>().loadSavedProfile();
 
       final name = authVm.collector?.name ?? username;
       ScaffoldMessenger.of(context).showSnackBar(

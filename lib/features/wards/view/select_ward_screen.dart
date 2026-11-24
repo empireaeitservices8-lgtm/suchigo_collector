@@ -332,58 +332,59 @@ class _SelectWardScreenState extends State<SelectWardScreen> {
 
                           SizedBox(height: 16.spMin),
 
-                          // Green "Go to Orders List ->" Action Button
-                          // SizedBox(
-                          //   width: double.infinity,
-                          //   height: 50.spMin,
-                          //   child: ElevatedButton(
-                          //     onPressed: () {
-                          //       Navigator.push(
-                          //         context,
-                          //         MaterialPageRoute(
-                          //           builder: (context) => ActiveOrdersScreen(
-                          //             filterWard:
-                          //                 widget.selectedWard?.displayName ??
-                          //                     widget.selectedWardName,
-                          //           ),
-                          //         ),
-                          //       );
-                          //     },
-                          //     style: ElevatedButton.styleFrom(
-                          //       backgroundColor: const Color(0xFF1D723C),
-                          //       foregroundColor: Colors.white,
-                          //       elevation: 0,
-                          //       shape: RoundedRectangleBorder(
-                          //         borderRadius: BorderRadius.circular(16.spMin),
-                          //       ),
-                          //     ),
-                          //     child: Row(
-                          //       mainAxisAlignment: MainAxisAlignment.center,
-                          //       children: [
-                          //         Icon(
-                          //           Icons.assignment_outlined,
-                          //           color: Colors.white,
-                          //           size: 20.spMin,
-                          //         ),
-                          //         SizedBox(width: 10.spMin),
-                          //         Text(
-                          //           "Go to Orders List",
-                          //           style: TextStyle(
-                          //             fontSize: 15.spMin,
-                          //             fontWeight: FontWeight.w700,
-                          //             color: Colors.white,
-                          //           ),
-                          //         ),
-                          //         SizedBox(width: 8.spMin),
-                          //         Icon(
-                          //           Icons.arrow_forward_rounded,
-                          //           color: Colors.white,
-                          //           size: 20.spMin,
-                          //         ),
-                          //       ],
-                          //     ),
-                          //   ),
-                          // ),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 50.spMin,
+                            child: ElevatedButton(
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => ActiveOrdersScreen(
+                                      filterLocalBody: widget.localBodyName,
+                                      localBodyId: widget.localBodyId,
+                                      filterWard:
+                                          widget.selectedWard?.displayName ??
+                                              widget.selectedWardName,
+                                    ),
+                                  ),
+                                );
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF1D723C),
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16.spMin),
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.assignment_outlined,
+                                    color: Colors.white,
+                                    size: 20.spMin,
+                                  ),
+                                  SizedBox(width: 10.spMin),
+                                  Text(
+                                    "View All Active Orders",
+                                    style: TextStyle(
+                                      fontSize: 15.spMin,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  SizedBox(width: 8.spMin),
+                                  Icon(
+                                    Icons.arrow_forward_rounded,
+                                    color: Colors.white,
+                                    size: 20.spMin,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
 
                           SizedBox(height: 18.spMin),
 
@@ -538,6 +539,10 @@ class _SelectWardScreenState extends State<SelectWardScreen> {
                                                 MaterialPageRoute(
                                                   builder: (context) =>
                                                       ActiveOrdersScreen(
+                                                    filterLocalBody:
+                                                        widget.localBodyName,
+                                                    localBodyId:
+                                                        widget.localBodyId,
                                                     filterWard:
                                                         ward.displayName,
                                                   ),
